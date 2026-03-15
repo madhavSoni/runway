@@ -41,6 +41,11 @@ export interface FormatToolbarProps {
   showSparklines: boolean;
   onToggleSparklines: () => void;
   onExportCsv: () => void;
+  showFormulaBar: boolean;
+  onToggleFormulaBar: () => void;
+  chartActive: boolean;
+  onToggleChart: () => void;
+  selectionExists: boolean;
 }
 
 export interface ColumnHeadersProps {

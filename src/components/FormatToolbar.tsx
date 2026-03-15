@@ -22,6 +22,11 @@ const FormatToolbar: React.FC<FormatToolbarProps> = ({
   showSparklines,
   onToggleSparklines,
   onExportCsv,
+  showFormulaBar,
+  onToggleFormulaBar,
+  chartActive,
+  onToggleChart,
+  selectionExists,
 }) => {
   return (
     <div className="format-toolbar">
@@ -56,6 +61,25 @@ const FormatToolbar: React.FC<FormatToolbarProps> = ({
           title="Export current grid as CSV file"
         >
           ↓ CSV
+        </button>
+        <button
+          className={`toolbar-btn${showFormulaBar ? ' active' : ''}`}
+          onClick={onToggleFormulaBar}
+          title="Toggle formula bar"
+          aria-pressed={showFormulaBar}
+        >
+          <span>ƒ</span>
+          <span>Formula</span>
+        </button>
+        <button
+          className={`toolbar-btn${chartActive ? ' active' : ''}`}
+          onClick={onToggleChart}
+          disabled={!selectionExists && !chartActive}
+          title="Chart selection"
+          aria-pressed={chartActive}
+        >
+          <span>▦</span>
+          <span>Chart</span>
         </button>
       </div>
     </div>
