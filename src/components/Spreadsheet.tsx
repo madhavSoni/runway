@@ -23,7 +23,6 @@ import {
   RenderRow,
   RowTypeMap,
   Scenario,
-  ScenarioId,
   Selection,
   SheetId,
   SheetState,
@@ -363,7 +362,10 @@ const Spreadsheet: React.FC = () => {
       const [dr, dc] = dirMap[direction];
       const nextRow = Math.max(0, Math.min(NUM_ROWS - 1, coord.row + dr));
       const nextCol = Math.max(0, Math.min(NUM_COLS - 1, coord.col + dc));
-      setSelection({ anchor: { row: nextRow, col: nextCol }, focus: { row: nextRow, col: nextCol } });
+      setSelection({
+        anchor: { row: nextRow, col: nextCol },
+        focus: { row: nextRow, col: nextCol },
+      });
     },
     [editingCell, activeSheetId],
   );
@@ -614,9 +616,7 @@ const Spreadsheet: React.FC = () => {
   }, [handleSelectSheet]);
 
   const handleRenameSheet = useCallback((id: SheetId, name: string) => {
-    setSheets((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, name: name.trim() || s.name } : s)),
-    );
+    setSheets((prev) => prev.map((s) => (s.id === id ? { ...s, name: name.trim() || s.name } : s)));
   }, []);
 
   // ── Container keyboard handler ─────────────────────────────────────────────

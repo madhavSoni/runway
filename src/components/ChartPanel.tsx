@@ -112,7 +112,7 @@ function ChartCanvas({ data, type }: ChartCanvasProps) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {pointXY.map((p, i) => {
+      {pointXY.map((p) => {
         const labelY = SVG_HEIGHT - PAD.bottom + 14;
         return (
           <g key={p.label}>
