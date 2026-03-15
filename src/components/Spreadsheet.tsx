@@ -22,8 +22,6 @@ import {
   SnapshotState,
 } from '../types';
 import {
-  computeColumnTotals,
-  computeRowTotals,
   formatCellValue,
   formatNumber,
   isNegativeNumber,
@@ -31,9 +29,11 @@ import {
   parseRawNumber,
 } from '../utils/formatting';
 import { evaluateFormula, isFormula } from '../utils/formulas';
+import { SCENARIOS } from '../scenarios';
 
 const NUM_ROWS = 10;
 const NUM_COLS = 10;
+const DEFAULT_COL_WIDTH = 112;
 
 const INITIAL_GRID: GridData = _.times(NUM_ROWS, () => _.times(NUM_COLS, _.constant('')));
 
@@ -64,6 +64,10 @@ const Spreadsheet: React.FC = () => {
   const [activeScenarioId, setActiveScenarioId] = useState<ScenarioId | null>(null);
   const [rowTypes, setRowTypes] = useState<RowTypeMap>({});
   const [showSparklines, setShowSparklines] = useState(false);
+  const [colWidths, setColWidths] = useState<number[]>(() =>
+    Array(NUM_COLS).fill(DEFAULT_COL_WIDTH),
+  );
+  const [rowHeaderWidth, setRowHeaderWidth] = useState(120);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -132,15 +136,60 @@ const Spreadsheet: React.FC = () => {
     );
   }, [gridData]);
 
-  const rowTotals = useMemo(() => computeRowTotals(displayGrid), [displayGrid]);
-  const columnTotals = useMemo(() => computeColumnTotals(displayGrid), [displayGrid]);
-  const grandTotal = useMemo(() => columnTotals.reduce((acc, t) => acc + t, 0), [columnTotals]);
+  // Detect which columns are percentage-typed (skip them in totals — summing % is meaningless)
+  const colFormats = useMemo<CellFormat[]>(
+    () =>
+      Array.from({ length: NUM_COLS }, (_x, ci) => {
+        for (let ri = 0; ri < NUM_ROWS; ri++) {
+          if (formatMap[`${ri}:${ci}`] === 'percentage') return 'percentage';
+        }
+        return 'auto';
+      }),
+    [formatMap],
+  );
+
+  const rowTotals = useMemo(
+    () =>
+      displayGrid.map((row) =>
+        row.reduce((sum, val, ci) => {
+          if (colFormats[ci] === 'percentage') return sum;
+          const n = parseRawNumber(val);
+          return isNaN(n) ? sum : sum + n;
+        }, 0),
+      ),
+    [displayGrid, colFormats],
+  );
+
+  const columnTotals = useMemo(
+    () =>
+      Array.from({ length: NUM_COLS }, (_x, ci) => {
+        if (colFormats[ci] === 'percentage') return null; // shown as —
+        return displayGrid.reduce((sum, row) => {
+          const n = parseRawNumber(row[ci]);
+          return isNaN(n) ? sum : sum + n;
+        }, 0);
+      }),
+    [displayGrid, colFormats],
+  );
+
+  const grandTotal = useMemo(() => rowTotals.reduce((acc, t) => acc + t, 0), [rowTotals]);
 
   const rowNumericValues = useMemo(() => {
     return displayGrid.map((row) => row.map((cell) => parseRawNumber(cell)));
   }, [displayGrid]);
 
   const renderRows = useMemo(() => buildRenderRows(NUM_ROWS, rowTypes), [rowTypes]);
+
+  // Active scenario for description display
+  const activeScenario = useMemo(
+    () => SCENARIOS.find((s) => s.id === activeScenarioId) ?? null,
+    [activeScenarioId],
+  );
+
+  // Column resize handler
+  const handleResizeCol = useCallback((col: number, width: number) => {
+    setColWidths((prev) => prev.map((w, i) => (i === col ? width : w)));
+  }, []);
 
   // ── Cell address display ───────────────────────────────────────────────────
 
@@ -541,6 +590,9 @@ const Spreadsheet: React.FC = () => {
             </div>
           </div>
           <ScenarioPicker activeScenarioId={activeScenarioId} onLoad={loadScenario} />
+          {activeScenario?.description && (
+            <span className="scenario-description">{activeScenario.description}</span>
+          )}
         </div>
         <FormatToolbar
           activeFormat={activeFormat}
@@ -566,33 +618,43 @@ const Spreadsheet: React.FC = () => {
             selectedCol={activeCell?.col ?? null}
             colLabels={colLabels}
             onColLabelChange={handleColLabelChange}
+            colWidths={colWidths}
+            onResizeCol={handleResizeCol}
+            showSparklines={showSparklines}
+            rowHeaderWidth={rowHeaderWidth}
+            onResizeRowHeader={setRowHeaderWidth}
           />
           {renderRows.map((renderRow, idx) => {
             if (renderRow.kind === 'data') {
               const ri = renderRow.rowIndex;
               return (
                 <div key={`row-${ri}`} className="spreadsheet-row" role="row">
-                  <EditableHeader
-                    value={rowLabels[ri] ?? ''}
-                    placeholder={String(ri + 1)}
-                    onChange={(v) => {
-                      handleRowLabelChange(ri, v);
-                    }}
-                    isActive={false}
-                    className="row-header-editable"
-                    rowType={rowTypes[ri] ?? 'data'}
-                    onRowTypeChange={(type) => {
-                      pushSnapshot(snapshotRef.current);
-                      setRowTypes((prev) => {
-                        if (type === 'data') {
-                          const next = { ...prev };
-                          delete next[ri];
-                          return next;
-                        }
-                        return { ...prev, [ri]: type };
-                      });
-                    }}
-                  />
+                  <div
+                    className={`row-header${activeCell?.row === ri ? ' row-active' : ''}`}
+                    style={{ width: rowHeaderWidth, minWidth: rowHeaderWidth }}
+                  >
+                    <EditableHeader
+                      value={rowLabels[ri] ?? ''}
+                      placeholder={String(ri + 1)}
+                      onChange={(v) => {
+                        handleRowLabelChange(ri, v);
+                      }}
+                      isActive={false}
+                      className="row-header-editable"
+                      rowType={rowTypes[ri] ?? 'data'}
+                      onRowTypeChange={(type) => {
+                        pushSnapshot(snapshotRef.current);
+                        setRowTypes((prev) => {
+                          if (type === 'data') {
+                            const next = { ...prev };
+                            delete next[ri];
+                            return next;
+                          }
+                          return { ...prev, [ri]: type };
+                        });
+                      }}
+                    />
+                  </div>
                   {showSparklines && (
                     <div className="sparkline-col">
                       <Sparkline values={rowNumericValues[ri]} />
@@ -619,6 +681,7 @@ const Spreadsheet: React.FC = () => {
                         format={fmt}
                         row={ri}
                         col={ci}
+                        width={colWidths[ci]}
                         initialEditValue={
                           editingCell?.row === ri && editingCell?.col === ci
                             ? editingInitialChar
@@ -633,7 +696,7 @@ const Spreadsheet: React.FC = () => {
                     );
                   })}
                   <div
-                    className="cell cell--total"
+                    className={`total-cell${rowTotals[ri] === 0 ? ' zero' : ''}`}
                     role="gridcell"
                     aria-label={`Row ${ri + 1} total`}
                   >
@@ -665,19 +728,23 @@ const Spreadsheet: React.FC = () => {
                   className="spreadsheet-row variance-row"
                   role="row"
                 >
-                  <div className="row-header-cell variance-label">{label}</div>
+                  <div
+                    className="row-header-cell variance-label"
+                    style={{ width: rowHeaderWidth, minWidth: rowHeaderWidth }}
+                  >
+                    {label}
+                  </div>
                   {showSparklines && <div className="sparkline-col" />}
                   {cells.map((v, ci) => {
-                    if (v === null) {
+                    const cellStyle = { width: colWidths[ci], minWidth: colWidths[ci] };
+                    if (v === null || v === 0) {
                       return (
-                        <div key={ci} className="cell cell--variance" role="gridcell">
-                          —
-                        </div>
-                      );
-                    }
-                    if (v === 0) {
-                      return (
-                        <div key={ci} className="cell cell--variance" role="gridcell">
+                        <div
+                          key={ci}
+                          className="cell cell--variance"
+                          style={cellStyle}
+                          role="gridcell"
+                        >
                           —
                         </div>
                       );
@@ -691,6 +758,7 @@ const Spreadsheet: React.FC = () => {
                       <div
                         key={ci}
                         className={`cell cell--variance cell-value--${sign}`}
+                        style={cellStyle}
                         role="gridcell"
                       >
                         <span className="variance-arrow">{arrow} </span>
@@ -698,7 +766,7 @@ const Spreadsheet: React.FC = () => {
                       </div>
                     );
                   })}
-                  <div className="cell cell--total" role="gridcell" />
+                  <div className="total-cell zero" role="gridcell" />
                 </div>
               );
             }
@@ -706,14 +774,26 @@ const Spreadsheet: React.FC = () => {
             return null;
           })}
           <div className="spreadsheet-row totals-row" role="row">
-            <div className="row-header">Σ</div>
+            <div
+              className="row-header"
+              style={{ width: rowHeaderWidth, minWidth: rowHeaderWidth }}
+              title="Sum of each column"
+            >
+              Σ
+            </div>
+            {showSparklines && <div className="sparkline-col" />}
             {columnTotals.map((total, colIdx) => (
               <div
                 key={colIdx}
-                className={`total-cell${total === 0 ? ' zero' : ''}`}
-                style={{ borderLeft: 'none', borderRight: '1px solid var(--grid-border)' }}
+                className={`total-cell${!total || total === 0 ? ' zero' : ''}`}
+                style={{
+                  width: colWidths[colIdx],
+                  minWidth: colWidths[colIdx],
+                  borderLeft: 'none',
+                  borderRight: '1px solid var(--grid-border)',
+                }}
               >
-                {total === 0 ? '—' : formatNumber(total, 'currency')}
+                {total === null ? '—' : total === 0 ? '—' : formatNumber(total, 'currency')}
               </div>
             ))}
             <div className={`total-cell grand-total${grandTotal === 0 ? ' zero' : ''}`}>

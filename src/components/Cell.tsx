@@ -14,11 +14,13 @@ const Cell: React.FC<CellProps> = ({
   isNegative,
   row,
   col,
+  width,
   initialEditValue,
   onSelect,
   onStartEdit,
   onCommit,
   onCancel,
+  refHighlightColor,
 }) => {
   const [editValue, setEditValue] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -100,7 +102,10 @@ const Cell: React.FC<CellProps> = ({
     .join(' ');
 
   return (
-    <div className="cell-wrapper">
+    <div
+      className="cell-wrapper"
+      style={width !== undefined ? { width, minWidth: width } : undefined}
+    >
       {isEditing ? (
         <Input
           ref={inputRef}
@@ -131,7 +136,9 @@ const Cell: React.FC<CellProps> = ({
           aria-selected={isActive || isSelected}
         >
           {value.startsWith('=') && (
-            <span className="formula-indicator" aria-hidden="true">ƒ</span>
+            <span className="formula-indicator" aria-hidden="true">
+              ƒ
+            </span>
           )}
           {displayVal || '\u00A0'}
         </motion.div>

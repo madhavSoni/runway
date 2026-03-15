@@ -41,11 +41,6 @@ export interface FormatToolbarProps {
   showSparklines: boolean;
   onToggleSparklines: () => void;
   onExportCsv: () => void;
-  showFormulaBar: boolean;
-  onToggleFormulaBar: () => void;
-  chartActive: boolean;
-  onToggleChart: () => void;
-  selectionExists: boolean;
 }
 
 export interface ColumnHeadersProps {
@@ -56,6 +51,8 @@ export interface ColumnHeadersProps {
   colWidths: number[];
   onResizeCol: (col: number, width: number) => void;
   showSparklines: boolean;
+  rowHeaderWidth: number;
+  onResizeRowHeader: (width: number) => void;
 }
 
 export type ScenarioId =

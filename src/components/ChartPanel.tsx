@@ -15,24 +15,7 @@ interface ChartCanvasProps {
 
 function ChartCanvas({ data, type }: ChartCanvasProps) {
   if (data.length === 0) {
-    return (
-      <svg
-        className="chart-svg"
-        viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-        aria-hidden="true"
-      >
-        <text
-          x={SVG_WIDTH / 2}
-          y={SVG_HEIGHT / 2}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fontSize="11"
-          fill="var(--text-muted)"
-        >
-          Select a range and open chart
-        </text>
-      </svg>
-    );
+    return <div className="chart-panel-empty">Select a range and open chart</div>;
   }
 
   const minVal = Math.min(0, ...data.map((d) => d.value));
@@ -49,11 +32,7 @@ function ChartCanvas({ data, type }: ChartCanvasProps) {
     const barW = slotW * 0.7;
 
     return (
-      <svg
-        className="chart-svg"
-        viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-        aria-hidden="true"
-      >
+      <svg className="chart-svg" viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} aria-hidden="true">
         {/* Baseline */}
         <line
           x1={PAD.left}
@@ -63,7 +42,6 @@ function ChartCanvas({ data, type }: ChartCanvasProps) {
           stroke="var(--text-muted)"
           strokeWidth="1"
         />
-
         {data.map((d, i) => {
           const barX = PAD.left + i * slotW + slotW * 0.15;
           const y = toY(d.value);
@@ -74,7 +52,7 @@ function ChartCanvas({ data, type }: ChartCanvasProps) {
           const labelY = SVG_HEIGHT - PAD.bottom + 14;
 
           return (
-            <g key={i}>
+            <g key={d.label}>
               <rect
                 x={barX}
                 y={barTop}
@@ -89,9 +67,7 @@ function ChartCanvas({ data, type }: ChartCanvasProps) {
                 fontSize="9"
                 textAnchor="middle"
                 fill="var(--text-muted)"
-                transform={
-                  manyPoints ? `rotate(-30, ${labelX}, ${labelY})` : undefined
-                }
+                transform={manyPoints ? `rotate(-30, ${labelX}, ${labelY})` : undefined}
               >
                 {d.label}
               </text>
@@ -114,18 +90,10 @@ function ChartCanvas({ data, type }: ChartCanvasProps) {
   const first = data[0].value;
   const last = data[data.length - 1].value;
   const lineColor =
-    last > first
-      ? 'var(--positive)'
-      : last < first
-        ? 'var(--negative)'
-        : 'var(--text-muted)';
+    last > first ? 'var(--positive)' : last < first ? 'var(--negative)' : 'var(--text-muted)';
 
   return (
-    <svg
-      className="chart-svg"
-      viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-      aria-hidden="true"
-    >
+    <svg className="chart-svg" viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} aria-hidden="true">
       {/* Baseline */}
       <line
         x1={PAD.left}
@@ -136,7 +104,6 @@ function ChartCanvas({ data, type }: ChartCanvasProps) {
         strokeWidth="1"
         strokeDasharray="3 3"
       />
-
       <polyline
         points={polylinePoints}
         fill="none"
@@ -145,11 +112,10 @@ function ChartCanvas({ data, type }: ChartCanvasProps) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-
       {pointXY.map((p, i) => {
         const labelY = SVG_HEIGHT - PAD.bottom + 14;
         return (
-          <g key={i}>
+          <g key={p.label}>
             <circle cx={p.x} cy={p.y} r={3} fill={lineColor} />
             <text
               x={p.x}
@@ -157,9 +123,7 @@ function ChartCanvas({ data, type }: ChartCanvasProps) {
               fontSize="9"
               textAnchor="middle"
               fill="var(--text-muted)"
-              transform={
-                manyPoints ? `rotate(-30, ${p.x}, ${labelY})` : undefined
-              }
+              transform={manyPoints ? `rotate(-30, ${p.x}, ${labelY})` : undefined}
             >
               {p.label}
             </text>
@@ -186,14 +150,25 @@ const ChartPanel: React.FC<ChartPanelProps> = ({ data, config, onTypeChange, onC
             className={`toolbar-btn${config.type === 'bar' ? ' active' : ''}`}
             onClick={() => onTypeChange('bar')}
             title="Bar chart"
-          >Bar</button>
+          >
+            Bar
+          </button>
           <button
             className={`toolbar-btn${config.type === 'line' ? ' active' : ''}`}
             onClick={() => onTypeChange('line')}
             title="Line chart"
-          >Line</button>
+          >
+            Line
+          </button>
         </div>
-        <button className="chart-panel-close" onClick={onClose} title="Close chart">✕</button>
+        <button
+          className="chart-panel-close"
+          onClick={onClose}
+          title="Close chart"
+          aria-label="Close chart"
+        >
+          ✕
+        </button>
       </div>
       <div className="chart-panel-body">
         <ChartCanvas data={data} type={config.type} />
