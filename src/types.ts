@@ -73,6 +73,8 @@ export interface EditableHeaderProps {
   onChange: (value: string) => void;
   isActive?: boolean;
   className?: string;
+  rowType?: RowType;
+  onRowTypeChange?: (type: RowType) => void;
 }
 
 export type RowType = 'data' | 'plan' | 'actual';

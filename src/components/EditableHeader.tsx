@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-import { EditableHeaderProps } from '../types';
+import { EditableHeaderProps, RowType } from '../types';
+
+const ROW_TYPE_CYCLE: RowType[] = ['data', 'plan', 'actual'];
+const ROW_TYPE_LABEL: Record<RowType, string> = { data: '·', plan: 'P', actual: 'A' };
 
 const EditableHeader: React.FC<EditableHeaderProps> = ({
   value,
@@ -8,6 +11,8 @@ const EditableHeader: React.FC<EditableHeaderProps> = ({
   onChange,
   isActive = false,
   className = '',
+  rowType,
+  onRowTypeChange,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
@@ -89,6 +94,21 @@ const EditableHeader: React.FC<EditableHeaderProps> = ({
       tabIndex={0}
       aria-label={value || placeholder}
     >
+      {rowType !== undefined && onRowTypeChange && (
+        <button
+          className={`row-type-badge row-type-badge--${rowType}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            const idx = ROW_TYPE_CYCLE.indexOf(rowType);
+            const next = ROW_TYPE_CYCLE[(idx + 1) % ROW_TYPE_CYCLE.length];
+            onRowTypeChange(next);
+          }}
+          title={`Row type: ${rowType} (click to cycle)`}
+          aria-label={`Row type: ${rowType}`}
+        >
+          {ROW_TYPE_LABEL[rowType]}
+        </button>
+      )}
       {value || <span className="editable-header-placeholder">{placeholder}</span>}
     </div>
   );
