@@ -24,12 +24,14 @@ export interface CellProps {
   format: CellFormat;
   row: number;
   col: number;
+  width?: number;
   initialEditValue?: string;
   onSelect: (row: number, col: number, shiftKey: boolean) => void;
   onStartEdit: (coord: CellCoord) => void;
   onCommit: (coord: CellCoord, direction: CommitDirection, newValue: string) => void;
   onCancel: (coord: CellCoord) => void;
   onNavigate: (coord: CellCoord, direction: NavDirection) => void;
+  refHighlightColor?: string; // color string for reference highlighting ring
 }
 
 export interface FormatToolbarProps {
@@ -39,6 +41,11 @@ export interface FormatToolbarProps {
   showSparklines: boolean;
   onToggleSparklines: () => void;
   onExportCsv: () => void;
+  showFormulaBar: boolean;
+  onToggleFormulaBar: () => void;
+  chartActive: boolean;
+  onToggleChart: () => void;
+  selectionExists: boolean;
 }
 
 export interface ColumnHeadersProps {
@@ -46,6 +53,9 @@ export interface ColumnHeadersProps {
   selectedCol: number | null;
   colLabels: string[];
   onColLabelChange: (col: number, label: string) => void;
+  colWidths: number[];
+  onResizeCol: (col: number, width: number) => void;
+  showSparklines: boolean;
 }
 
 export type ScenarioId =
@@ -101,3 +111,50 @@ export type RenderRow =
   | { kind: 'data'; rowIndex: number }
   | { kind: 'variance'; planRow: number; actualRow: number }
   | { kind: 'variance-pct'; planRow: number; actualRow: number };
+
+// Multi-sheet
+export type SheetId = string;
+
+export interface SheetState {
+  id: SheetId;
+  name: string;
+  gridData: GridData;
+  formatMap: FormatMap;
+  rowLabels: string[];
+  colLabels: string[];
+  rowTypes: RowTypeMap;
+  activeScenarioId: ScenarioId | null;
+  past: SnapshotState[];
+  future: SnapshotState[];
+}
+
+export interface SheetTabsProps {
+  sheets: SheetState[];
+  activeSheetId: SheetId;
+  onSelectSheet: (id: SheetId) => void;
+  onAddSheet: () => void;
+  onRenameSheet: (id: SheetId, name: string) => void;
+}
+
+// Formula bar (display-only — no edit callbacks needed)
+export interface FormulaBarProps {
+  value: string; // raw formula or value of active cell
+  hasActiveCell: boolean;
+  cellAddress: string; // e.g. "B3"
+}
+
+// Chart panel
+export type ChartType = 'bar' | 'line';
+export interface ChartConfig {
+  type: ChartType;
+}
+export interface ChartDataPoint {
+  label: string;
+  value: number;
+}
+export interface ChartPanelProps {
+  data: ChartDataPoint[];
+  config: ChartConfig;
+  onTypeChange: (type: ChartType) => void;
+  onClose: () => void;
+}
