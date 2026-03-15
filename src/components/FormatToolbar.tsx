@@ -19,6 +19,9 @@ const FormatToolbar: React.FC<FormatToolbarProps> = ({
   activeFormat,
   onFormatChange,
   disabled,
+  showSparklines,
+  onToggleSparklines,
+  onExportCsv,
 }) => {
   return (
     <div className="format-toolbar">
@@ -38,6 +41,23 @@ const FormatToolbar: React.FC<FormatToolbarProps> = ({
           <span>{label}</span>
         </button>
       ))}
+      <div className="toolbar-right">
+        <button
+          className={`toolbar-btn sparkline-toggle${showSparklines ? ' active' : ''}`}
+          onClick={onToggleSparklines}
+          title="Toggle sparkline trend charts (shows mini charts in row headers)"
+          aria-pressed={showSparklines}
+        >
+          〜 Trend
+        </button>
+        <button
+          className="toolbar-btn csv-export"
+          onClick={onExportCsv}
+          title="Export current grid as CSV file"
+        >
+          ↓ CSV
+        </button>
+      </div>
     </div>
   );
 };

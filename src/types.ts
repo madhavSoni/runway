@@ -36,6 +36,9 @@ export interface FormatToolbarProps {
   activeFormat: CellFormat;
   onFormatChange: (format: CellFormat) => void;
   disabled: boolean;
+  showSparklines: boolean;
+  onToggleSparklines: () => void;
+  onExportCsv: () => void;
 }
 
 export interface ColumnHeadersProps {
