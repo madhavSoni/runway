@@ -1,4 +1,4 @@
-import type { GridData } from '../types';
+import type { CellCoord, GridData } from '../types';
 
 export type FormulaResult = { value: number; error: undefined } | { value: null; error: string };
 
@@ -130,4 +130,28 @@ export function evaluateFormula(formula: string, gridData: GridData): FormulaRes
 /** Returns true if the value is a formula (starts with "="). */
 export function isFormula(value: string): boolean {
   return value.startsWith('=');
+}
+
+const REF_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#a855f7', '#ec4899'];
+
+export interface RefHighlight {
+  coord: CellCoord;
+  color: string;
+}
+
+export function parseFormulaRefs(formula: string): RefHighlight[] {
+  if (!formula.startsWith('=')) return [];
+  const seen = new Map<string, string>();
+  let colorIdx = 0;
+  for (const m of formula.matchAll(/\b([A-Ja-j])(\d{1,2})\b/g)) {
+    const col = m[1].toUpperCase().charCodeAt(0) - 65;
+    const row = parseInt(m[2], 10) - 1;
+    if (row < 0 || row > 9 || col < 0 || col > 9) continue;
+    const key = `${row}:${col}`;
+    if (!seen.has(key)) seen.set(key, REF_COLORS[colorIdx++ % REF_COLORS.length]);
+  }
+  return Array.from(seen.entries()).map(([key, color]) => {
+    const [r, c] = key.split(':').map(Number);
+    return { coord: { row: r, col: c }, color };
+  });
 }
