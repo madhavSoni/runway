@@ -88,9 +88,11 @@ const Cell: React.FC<CellProps> = ({
   const displayVal = displayValue ?? value;
 
   // Respect prefers-reduced-motion for active cell animation
-  const selectionShadow = isActive
-    ? '0 0 0 2px #d4af37, 0 0 14px 2px rgba(212, 175, 55, 0.22)'
-    : '0 0 0 0px transparent';
+  const selectionShadow = refHighlightColor
+    ? `0 0 0 2px ${refHighlightColor}, 0 0 8px ${refHighlightColor}66`
+    : isActive
+      ? '0 0 0 2px #d4af37, 0 0 14px 2px rgba(212, 175, 55, 0.22)'
+      : '0 0 0 0px transparent';
 
   // Class names: active cell gets glow via Framer Motion; selected (non-active) cells get blue tint
   const cellClassName = [
