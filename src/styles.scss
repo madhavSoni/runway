@@ -1103,3 +1103,238 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+// ============================================================
+// Formula bar
+// ============================================================
+.formula-bar {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  margin-bottom: 8px;
+  background: var(--surface-bg);
+  border: 1px solid var(--grid-border);
+  border-radius: 6px;
+  padding: 0 4px;
+  gap: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  &:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-dim);
+  }
+}
+
+.formula-bar-cell-ref {
+  min-width: 36px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent);
+  text-align: center;
+  border-right: 1px solid var(--grid-border);
+  padding: 0 8px;
+  user-select: none;
+}
+
+.formula-bar-icon {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-style: italic;
+  color: var(--text-muted);
+  padding: 0 4px;
+  border-right: 1px solid var(--grid-border);
+  user-select: none;
+
+  &.formula-bar-icon--active {
+    color: var(--accent);
+    text-shadow: 0 0 8px var(--accent-glow);
+  }
+}
+
+.formula-bar-display {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+.formula-bar-empty {
+  color: var(--text-muted);
+}
+
+// ============================================================
+// Spreadsheet + chart side-by-side layout
+// ============================================================
+.spreadsheet-with-chart {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+// ============================================================
+// Chart panel
+// ============================================================
+.chart-panel {
+  width: 320px;
+  flex-shrink: 0;
+  background: var(--surface-bg);
+  border: 1px solid var(--grid-border);
+  border-radius: 6px;
+  box-shadow: var(--container-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chart-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--grid-border);
+  background: var(--header-bg);
+}
+
+.chart-panel-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.chart-panel-type-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.chart-panel-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 12px;
+
+  &:hover {
+    background: var(--surface-alt);
+    color: var(--text-primary);
+  }
+}
+
+.chart-panel-body {
+  padding: 12px;
+}
+
+.chart-panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+
+  text {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    fill: var(--text-muted);
+  }
+}
+
+// ============================================================
+// Sheet tabs bar
+// ============================================================
+.sheet-tabs-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0 0;
+  border-top: 1px solid var(--grid-border);
+  margin-top: 0;
+}
+
+.sheet-tab {
+  height: 28px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--grid-border);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover:not(.sheet-tab--active) {
+    background: var(--surface-bg);
+    color: var(--text-primary);
+  }
+
+  &.sheet-tab--active {
+    background: var(--surface-bg);
+    color: var(--accent);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+}
+
+.sheet-tab-label {
+  pointer-events: none;
+}
+
+.sheet-tab-input {
+  width: 80px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--accent);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+}
+
+.sheet-tab-add {
+  height: 28px;
+  width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--grid-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  margin-left: 4px;
+  line-height: 1;
+
+  &:hover {
+    background: var(--surface-alt);
+    color: var(--text-primary);
+  }
+}
