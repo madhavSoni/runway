@@ -2,7 +2,7 @@ import React from 'react';
 import { FormulaBarProps } from '../types';
 
 const FormulaBar: React.FC<FormulaBarProps> = ({ value, hasActiveCell, cellAddress }) => {
-  const isFormula = value.startsWith('=');
+  const isFormula = hasActiveCell && value.startsWith('=');
   return (
     <div className="formula-bar">
       <span className="formula-bar-cell-ref">{hasActiveCell ? cellAddress : '—'}</span>
