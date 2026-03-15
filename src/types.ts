@@ -35,7 +35,6 @@ export interface FormatToolbarProps {
   activeFormat: CellFormat;
   onFormatChange: (format: CellFormat) => void;
   disabled: boolean;
-  selectedCell: CellCoord | null;
 }
 
 export interface ColumnHeadersProps {
