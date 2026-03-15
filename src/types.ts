@@ -15,7 +15,8 @@ export type NavDirection = 'up' | 'down' | 'left' | 'right' | 'home' | 'end';
 
 export interface CellProps {
   value: string;
-  displayValue: string;
+  displayValue?: string;
+  isActive: boolean;
   isSelected: boolean;
   isEditing: boolean;
   isNumeric: boolean;
@@ -24,7 +25,7 @@ export interface CellProps {
   row: number;
   col: number;
   initialEditValue?: string;
-  onSelect: (coord: CellCoord) => void;
+  onSelect: (row: number, col: number, shiftKey: boolean) => void;
   onStartEdit: (coord: CellCoord) => void;
   onCommit: (coord: CellCoord, direction: CommitDirection, newValue: string) => void;
   onCancel: (coord: CellCoord) => void;
@@ -73,3 +74,24 @@ export interface EditableHeaderProps {
   isActive?: boolean;
   className?: string;
 }
+
+export type RowType = 'data' | 'plan' | 'actual';
+export type RowTypeMap = Record<number, RowType>; // sparse; missing key = 'data'
+
+export type Selection = {
+  anchor: CellCoord;
+  focus: CellCoord;
+};
+
+export type SnapshotState = {
+  gridData: GridData;
+  formatMap: FormatMap;
+  rowLabels: string[];
+  colLabels: string[];
+  rowTypes: RowTypeMap;
+};
+
+export type RenderRow =
+  | { kind: 'data'; rowIndex: number }
+  | { kind: 'variance'; planRow: number; actualRow: number }
+  | { kind: 'variancePct'; planRow: number; actualRow: number };
