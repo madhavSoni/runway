@@ -94,4 +94,4 @@ export type SnapshotState = {
 export type RenderRow =
   | { kind: 'data'; rowIndex: number }
   | { kind: 'variance'; planRow: number; actualRow: number }
-  | { kind: 'variancePct'; planRow: number; actualRow: number };
+  | { kind: 'variance-pct'; planRow: number; actualRow: number };
