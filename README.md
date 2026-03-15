@@ -59,15 +59,19 @@ npx jest         # Run tests
 
 **Financial number formatting** — All formatting lives in `src/utils/formatting.ts` as pure functions. The key decision: auto-detect whether a cell value is numeric, format with `Intl.NumberFormat('en-US')` on display, but store the raw string in state. You can type `1234.5` and see `$1,234.50` in the cell without losing the underlying precision. Four format modes (auto, currency, number, percentage) can be applied per-cell or across a selection.
 
-**Formula engine** — Cells starting with `=` are evaluated by a purpose-built parser in `src/utils/formulas.ts`. Supported: `=SUM(...)`, `=AVERAGE(...)`, `=MIN(...)`, `=MAX(...)`, arithmetic (`=A1+B2*3`), and cell references. Circular references are detected at evaluation time and display `#CIRC!`. Formula cell references are color-highlighted with a 6-color palette.
+**Formula engine** — Cells starting with `=` are evaluated by a purpose-built parser in `src/utils/formulas.ts`. Supported: `=SUM(...)`, `=AVERAGE(...)`, `=MIN(...)`, `=MAX(...)`, arithmetic (`=A1+B2*3`), and cell references. Circular references are detected at evaluation time and display `#CIRC!`. When the formula bar is active, formula cell references are color-highlighted with a 6-color palette so you can visually trace which cells a formula depends on.
 
 **Pre-built financial scenarios** — Rather than starting with an empty grid, a scenario picker lets reviewers instantly load realistic financial data (Revenue Model, Cash Flow, Budget vs. Actuals, P&L Summary) to explore the formatting, variance, and sparkline features without manual data entry.
 
 **Row types and variance** — Each row carries a type (`data`, `plan`, or `actual`). When a plan row is directly above an actual row, two variance rows are auto-inserted on render: absolute (`actual − plan`) and percentage. These rows are read-only and never stored — they're derived, keeping the data model simple.
 
-**Multi-cell selection, copy/paste, and undo/redo** — Shift+Arrow/Click extends selection. Ctrl+C copies as tab-delimited text (Excel/Google Sheets compatible). Ctrl+V pastes. Ctrl+Z/Y provides full undo/redo via snapshot-based history (capped at 50 entries). These are table-stakes for any spreadsheet interaction.
+**Multi-sheet support** — The spreadsheet supports multiple sheets via a tab bar at the bottom. Each sheet maintains its own grid data, formatting, labels, row types, and independent undo/redo history. Users can add new sheets, switch between them, and rename tabs by double-clicking.
 
-**Visual polish** — Dark mode (Bloomberg Terminal-inspired navy + gold) and light mode (warm parchment), sparkline trend charts per row, column resize handles, editable row/column labels, CSV export, and a formula bar showing the active cell's address and raw value.
+**Interactive charts** — Select a range of cells and click the Chart button to visualize the data as a bar or line chart. The chart panel appears alongside the grid with Framer Motion animations, supports toggling between chart types, and auto-updates when the underlying data changes.
+
+**Multi-cell selection, copy/paste, and undo/redo** — Shift+Arrow/Click extends selection. Ctrl+C copies as tab-delimited text (Excel/Google Sheets compatible). Ctrl+V pastes. Ctrl+Z/Y provides full undo/redo via snapshot-based history (capped at 50 entries per sheet). These are table-stakes for any spreadsheet interaction.
+
+**Visual polish** — Dark mode (Bloomberg Terminal-inspired navy + gold) and light mode (warm parchment), sparkline trend charts per row, column resize handles, editable row/column labels, CSV export, and a toggleable formula bar showing the active cell's address and raw value.
 
 ### Key assumptions and product decisions
 
@@ -79,6 +83,7 @@ npx jest         # Run tests
 - **Variance computed on the fly** — Variance rows are never stored in cell state; they are derived during render from the corresponding plan/actual row pair. This keeps the data model simple and ensures variance is always consistent.
 - **Raw string storage** — Cell state stores the raw user input (`"1234.5"`, `"=SUM(A1:B3)"`). Formatting is display-only. This preserves precision and makes serialization straightforward.
 - **Snapshot-based undo** — Each undoable action captures a full snapshot (grid, formats, labels, row types). More memory-intensive than command-based undo but far simpler to implement correctly and avoids bugs around operation composition.
+- **Per-sheet undo history** — Each sheet has its own independent undo/redo stack so switching sheets doesn't interfere with undo context.
 
 ### Trade-offs
 
@@ -89,9 +94,11 @@ npx jest         # Run tests
 | String-based cell values | Uniform handling of formulas, text, and numbers | Type coercion at display time |
 | Chakra UI for Input only | Accessible, cross-browser input component | Slight inconsistency mixing Chakra + SCSS |
 | `requestAnimationFrame` for focus | Avoids focus racing with React's commit phase | ~16ms imperceptible delay |
-| Formula scope is grid-level | Simple evaluation, no dependency graph needed | No cross-scenario or named-range formulas |
+| Formula scope is grid-level | Simple evaluation, no dependency graph needed | No cross-sheet or named-range formulas |
 | CSS custom properties for theming | Instant theme switching, no JS re-render needed | Requires disciplined use of variables |
 | SCSS over CSS-in-JS | Full selector power, no runtime overhead | Separate from component definitions |
+| Per-sheet state in array | Simple multi-sheet model, independent histories | Linear scan to find active sheet |
+| Formula ref highlighting tied to formula bar | Keeps the grid clean by default | Users must toggle formula bar to see highlights |
 
 ---
 
@@ -102,9 +109,11 @@ npx jest         # Run tests
 - **Named ranges** — Allow formulas like `=SUM(Revenue)` instead of `=SUM(B2:M2)` by referencing row/column labels.
 - **More functions** — `=IF(...)`, `=ROUND(...)`, `=COUNT(...)`, and financial functions like `=NPV(...)` or `=IRR(...)`.
 - **Conditional formatting** — Highlight cells above/below a threshold with automatic background colors.
-- **Cross-scenario references** — Reference cells from other scenarios. Would require a full dependency graph for recalculation.
+- **Cross-sheet formulas** — Reference cells from other sheets (e.g., `=Sheet2!B3`). Would require a dependency graph for recalculation.
 - **Collaborative editing** — Real-time multi-user editing via WebSocket or CRDT-based sync.
 - **Virtual scrolling** — For grids larger than 10×10, virtualize rows/columns to maintain render performance.
+- **Inline formula bar editing** — Currently display-only; editing the formula directly in the formula bar would match Excel's UX.
+- **Chart persistence** — Charts currently close when switching sheets; persisting chart config per-sheet would improve the workflow.
 
 ---
 
@@ -164,7 +173,15 @@ Cells starting with `=` are evaluated by a purpose-built parser (`src/utils/form
 - **Cell references**: Auto-resolve to their numeric values at evaluation time
 - **Error handling**: `#REF!` (invalid reference), `#ERR!` (parse error), `#DIV/0!` (division by zero), `#NAN!` (not a number), `#CIRC!` (circular reference)
 - **Formula indicator**: Cells containing formulas show an `ƒ` badge in display mode
-- **Reference highlighting**: Formula cell references are color-coded with a 6-color palette (round-robin), making it easy to see which cells a formula depends on
+- **Reference highlighting**: When the formula bar is toggled on, cells referenced by the active formula are color-highlighted with a 6-color palette (blue, red, green, amber, purple, pink), cycling round-robin. Each referenced cell gets a matching colored glow via Framer Motion's `boxShadow`.
+
+### Formula Bar
+
+- Toggle via the **ƒ Formula** button in the toolbar
+- Displays the **cell address** (e.g., "B3") and **raw value** of the active cell
+- Shows an `ƒ` indicator when the active cell contains a formula
+- Activates **formula reference highlighting** — cells referenced by the formula glow with color-coded borders
+- Display-only — editing happens directly in the cell
 
 ### Pre-Built Scenarios
 
@@ -186,6 +203,25 @@ Each scenario populates row labels, column labels, cell data, format maps, and r
   - **Percentage variance**: `(actual − plan) / |plan| × 100`
 - Variance rows are **read-only** and **never stored** — they are derived during render, keeping the data model simple and always consistent
 
+### Multi-Sheet Support
+
+- **Sheet tabs** at the bottom of the spreadsheet, modeled after Excel/Google Sheets
+- **Add sheets** via the `+` button — each new sheet starts with a blank 10×10 grid
+- **Switch sheets** by clicking a tab — selection and edit state reset on switch
+- **Rename sheets** by double-clicking a tab name (with Enter/Escape commit/cancel)
+- **Independent state** — each sheet maintains its own grid data, format map, labels, row types, active scenario, and undo/redo history
+- Sheets start with two tabs (Sheet 1, Sheet 2) by default
+
+### Interactive Charts
+
+- **Toggle** via the **▦ Chart** button in the toolbar (requires a cell selection)
+- **Chart types**: Bar chart and Line chart, switchable via buttons in the chart panel header
+- **Data source**: Charts visualize all numeric values in the current selection
+- **Color coding**: Bars are green (positive values) or red (negative values); line charts color based on overall trend direction
+- **Animated panel**: Slides in/out with Framer Motion; includes a close button
+- **SVG rendering**: 280×180px canvas with labeled axes, baseline at zero, and rotated labels for dense data (>5 points)
+- Charts auto-update when the underlying cell data changes
+
 ### Multi-Cell Selection
 
 - **Click** to select a single cell
@@ -203,7 +239,8 @@ Each scenario populates row labels, column labels, cell data, format maps, and r
 
 - **Ctrl+Z** to undo, **Ctrl+Y** (or Ctrl+Shift+Z) to redo
 - Full snapshot-based history: grid data, cell formats, row/column labels, and row types are all restored
-- History stack capped at **50 entries** to prevent unbounded memory growth
+- History stack capped at **50 entries per sheet** to prevent unbounded memory growth
+- Each sheet has its own undo/redo stack — switching sheets doesn't affect undo context
 
 ### Row & Column Totals
 
@@ -225,18 +262,13 @@ Each scenario populates row labels, column labels, cell data, format maps, and r
 - Drag the resize handle on any column header border
 - Minimum width: 48px
 - Per-column widths are stored in component state
+- Row header width is also resizable
 
 ### Editable Labels
 
 - Double-click any row or column header to rename it
 - Label changes are fully undoable
 - Labels are included in CSV export
-
-### Formula Bar
-
-- Displays the **cell address** (e.g., "B3") and **raw value** of the active cell
-- Shows an `ƒ` indicator when the active cell contains a formula
-- Display-only — editing happens directly in the cell
 
 ### CSV Export
 
@@ -246,10 +278,19 @@ Each scenario populates row labels, column labels, cell data, format maps, and r
 
 ### Theme Toggle
 
-- **Dark mode** (default): Deep navy background with gold accents — inspired by Bloomberg Terminal aesthetics
-- **Light mode**: Warm parchment tones with brown accents
+- **Dark mode** (default): Deep navy background (`#0f1117`) with gold accents (`#d4af37`)
+- **Light mode**: Warm parchment (`#f5f2ec`) with brown accents (`#76613d`)
 - All colors are driven by CSS custom properties for instant, smooth transitions
-- Toggle via the sun/moon button in the header
+- Toggle via the ☀/☾ button in the header
+- Positive values: green (`#34d399` dark / `#1a7a4a` light); Negative values: red (`#f87171` dark / `#b91c1c` light)
+
+### Accessibility
+
+- Full ARIA markup: `role="grid"`, `role="row"`, `role="gridcell"`, `role="tab"`, `role="tablist"`
+- `aria-selected` on active/selected cells and active sheet tabs
+- `aria-label` on every interactive element (cells, buttons, inputs)
+- `aria-pressed` on toggle buttons (format, sparklines, formula bar, chart)
+- `prefers-reduced-motion` support — disables Framer Motion animations when enabled
 
 ---
 
@@ -270,6 +311,7 @@ Each scenario populates row labels, column labels, cell data, format maps, and r
 │  Layer 3: Leaf Components                                │
 │  Cell · ColumnHeaders · EditableHeader · FormatToolbar    │
 │  FormulaBar · ScenarioPicker · Sparkline                 │
+│  ChartPanel · SheetTabs                                  │
 │  (stateless except Cell's transient editValue)           │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -280,29 +322,36 @@ All mutable state lives in `Spreadsheet.tsx`:
 
 | State | Type | Description |
 |-------|------|-------------|
-| `gridData` | `string[][]` | 10×10 grid of raw cell values |
-| `formatMap` | `Record<string, CellFormat>` | Sparse map of cell formats (key: `"row:col"`) |
+| `sheets` | `SheetState[]` | Array of sheet objects, each holding its own grid/format/labels/history |
+| `activeSheetId` | `SheetId` | Currently visible sheet |
 | `selection` | `{ anchor, focus }` | Multi-cell selection range |
 | `editingCell` | `CellCoord \| null` | Currently editing cell |
-| `rowLabels` / `colLabels` | `string[]` | Editable header labels |
-| `rowTypes` | `Record<number, RowType>` | Sparse row-type map (plan/actual/data) |
-| `colWidths` | `Record<number, number>` | Per-column widths (from drag resize) |
+| `colWidths` | `number[]` | Per-column widths (from drag resize) |
+| `rowHeaderWidth` | `number` | Resizable row header width |
 | `showSparklines` | `boolean` | Sparkline visibility toggle |
-| `scenarioId` | `ScenarioId` | Currently loaded scenario |
+| `showFormulaBar` | `boolean` | Formula bar visibility toggle |
+| `chartConfig` | `ChartConfig \| null` | Active chart type (bar/line) or null if hidden |
+
+Each `SheetState` contains: `gridData`, `formatMap`, `rowLabels`, `colLabels`, `rowTypes`, `activeScenarioId`, `past` (undo stack), `future` (redo stack).
 
 ### Derived State (computed on render, never stored)
 
+- `activeSheet` — The sheet object matching `activeSheetId`
 - `displayGrid` — Grid with formulas evaluated to display values
 - `colFormats` — Detected column-level format (majority vote)
 - `rowTotals` / `columnTotals` / `grandTotal` — Aggregated sums
 - `renderRows` — Includes auto-inserted variance rows between plan/actual pairs
+- `refHighlightMap` — Formula reference → color map (active only when formula bar is shown)
+- `chartData` — Numeric data points extracted from the current selection for charting
 
 ### Key Patterns
 
 - **Immutable updates** — All grid mutations use spread/slice to create new arrays; no in-place mutation
 - **Memoization** — `Cell`, `EditableHeader`, `Sparkline` are wrapped in `React.memo`; derived state uses `useMemo`
-- **Ref guards** — `snapshotRef` avoids stale closures; `wasEscapedRef` prevents blur commits after Escape; `pastRef`/`futureRef` hold undo/redo stacks outside the render cycle
+- **Ref guards** — `snapshotRef` avoids stale closures; `wasEscapedRef` prevents blur commits after Escape; `sheetsRef` keeps current sheets accessible in callbacks
 - **Controlled inputs** — Cell edit values are local state, committed to parent on Enter/Tab/blur
+- **Sheet-scoped updates** — `updateActiveSheet()` helper applies mutations only to the active sheet, leaving others untouched
+- **Snapshot-per-sheet** — `pushSnapshotToSheet()` captures undo snapshots within the sheet, keeping histories independent
 
 ### Data Flow: Editing a Cell
 
@@ -316,8 +365,7 @@ All mutable state lives in `Spreadsheet.tsx`:
 5. User presses Tab
    └─ Cell.handleKeyDown → onCommit(coord, 'tab', editValue)
 6. Spreadsheet.commitEdit:
-   └─ Pushes snapshot to undo stack
-   └─ Updates gridData immutably
+   └─ updateActiveSheet: pushes snapshot, updates gridData
    └─ Clears editingCell
    └─ Moves selection to next cell
 7. Grid re-renders with new value
@@ -359,13 +407,15 @@ react-interview/
 ├── src/
 │   ├── components/
 │   │   ├── App.tsx           # Root shell: ChakraProvider, theme toggle, header
-│   │   ├── Spreadsheet.tsx   # Central state container — owns all grid state
+│   │   ├── Spreadsheet.tsx   # Central state container — owns all grid/sheet state
 │   │   ├── Cell.tsx          # Single cell: display/edit swap, keyboard handling
+│   │   ├── ChartPanel.tsx    # Interactive SVG charts (bar + line) with Framer Motion
 │   │   ├── ColumnHeaders.tsx # Column headers with drag-to-resize handles
 │   │   ├── EditableHeader.tsx# Editable row/column labels + row-type badges
-│   │   ├── FormatToolbar.tsx # Format buttons (Auto/$/#/%), sparkline toggle, CSV export
-│   │   ├── FormulaBar.tsx    # Display-only formula bar showing active cell address & value
+│   │   ├── FormatToolbar.tsx # Format buttons (Auto/$/#/%), sparkline/formula/chart/CSV toggles
+│   │   ├── FormulaBar.tsx    # Toggleable formula bar: cell address + raw value display
 │   │   ├── ScenarioPicker.tsx# Dropdown to load pre-built financial scenarios
+│   │   ├── SheetTabs.tsx     # Multi-sheet tab bar: add, switch, rename sheets
 │   │   └── Sparkline.tsx     # SVG mini trend chart per row
 │   ├── scenarios/
 │   │   └── index.ts          # 4 pre-built scenario templates (Revenue, Cash Flow, Budget, P&L)
