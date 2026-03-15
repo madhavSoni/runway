@@ -44,9 +44,10 @@ const ScenarioPicker: React.FC<ScenarioPickerProps> = ({ activeScenarioId, onLoa
         <span className="scenario-picker-name">
           {activeScenario ? activeScenario.name : 'Blank'}
         </span>
-        <span className="scenario-picker-chevron" aria-hidden>▾</span>
+        <span className="scenario-picker-chevron" aria-hidden>
+          ▾
+        </span>
       </button>
-
       {open && (
         <div className="scenario-picker-dropdown" role="listbox">
           <button
