@@ -12,6 +12,7 @@ const EditableHeader: React.FC<EditableHeaderProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
+  const wasEscapedRef = useRef(false);
 
   // Keep editValue in sync when value changes externally (e.g. scenario load)
   useEffect(() => {
@@ -20,7 +21,10 @@ const EditableHeader: React.FC<EditableHeaderProps> = ({
 
   useEffect(() => {
     if (isEditing) {
-      requestAnimationFrame(() => inputRef.current?.select());
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      });
     }
   }, [isEditing]);
 
@@ -30,13 +34,28 @@ const EditableHeader: React.FC<EditableHeaderProps> = ({
   };
 
   const cancel = () => {
+    wasEscapedRef.current = true;
     setIsEditing(false);
     setEditValue(value);
   };
 
+  const handleBlur = () => {
+    if (wasEscapedRef.current) {
+      wasEscapedRef.current = false;
+      return;
+    }
+    commit();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') { e.preventDefault(); commit(); }
-    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+    }
   };
 
   if (isEditing) {
@@ -47,7 +66,7 @@ const EditableHeader: React.FC<EditableHeaderProps> = ({
         value={editValue}
         onChange={(e) => setEditValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        onBlur={commit}
+        onBlur={handleBlur}
         aria-label={`Edit label: ${placeholder}`}
       />
     );
@@ -66,4 +85,4 @@ const EditableHeader: React.FC<EditableHeaderProps> = ({
   );
 };
 
-export default EditableHeader;
+export default React.memo(EditableHeader);
