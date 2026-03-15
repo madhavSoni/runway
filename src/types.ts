@@ -63,6 +63,7 @@ export interface Scenario {
   colLabels: string[];
   data: GridData;
   formatMap: FormatMap;
+  rowTypes?: RowTypeMap;
 }
 
 export interface ScenarioPickerProps {

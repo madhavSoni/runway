@@ -6,6 +6,7 @@ import ColumnHeaders from 'components/ColumnHeaders';
 import EditableHeader from 'components/EditableHeader';
 import FormatToolbar from 'components/FormatToolbar';
 import ScenarioPicker from 'components/ScenarioPicker';
+import { Sparkline } from './Sparkline';
 import {
   CellCoord,
   CellFormat,
@@ -13,8 +14,12 @@ import {
   FormatMap,
   GridData,
   NavDirection,
+  RenderRow,
+  RowTypeMap,
   Scenario,
   ScenarioId,
+  Selection,
+  SnapshotState,
 } from '../types';
 import {
   computeColumnTotals,
@@ -23,25 +28,83 @@ import {
   formatNumber,
   isNegativeNumber,
   isNumericString,
+  parseRawNumber,
 } from '../utils/formatting';
+import { evaluateFormula, isFormula } from '../utils/formulas';
 
 const NUM_ROWS = 10;
 const NUM_COLS = 10;
 
 const INITIAL_GRID: GridData = _.times(NUM_ROWS, () => _.times(NUM_COLS, _.constant('')));
 
+// ── Pure helper: build render rows (defined outside component for stability) ──
+
+function buildRenderRows(numRows: number, types: RowTypeMap): RenderRow[] {
+  const rows: RenderRow[] = [];
+  for (let i = 0; i < numRows; i++) {
+    rows.push({ kind: 'data', rowIndex: i });
+    if (types[i] === 'plan' && types[i + 1] === 'actual') {
+      rows.push({ kind: 'variance', planRow: i, actualRow: i + 1 });
+      rows.push({ kind: 'variance-pct', planRow: i, actualRow: i + 1 });
+    }
+  }
+  return rows;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const Spreadsheet: React.FC = () => {
   const [gridData, setGridData] = useState<GridData>(INITIAL_GRID);
   const [formatMap, setFormatMap] = useState<FormatMap>({});
-  const [selectedCell, setSelectedCell] = useState<CellCoord | null>(null);
+  const [selection, setSelection] = useState<Selection | null>(null);
   const [editingCell, setEditingCell] = useState<CellCoord | null>(null);
   const [editingInitialChar, setEditingInitialChar] = useState<string | undefined>(undefined);
   const [activeFormat, setActiveFormat] = useState<CellFormat>('auto');
   const [rowLabels, setRowLabels] = useState<string[]>(Array(NUM_ROWS).fill(''));
   const [colLabels, setColLabels] = useState<string[]>(Array(NUM_COLS).fill(''));
   const [activeScenarioId, setActiveScenarioId] = useState<ScenarioId | null>(null);
+  const [rowTypes, setRowTypes] = useState<RowTypeMap>({});
+  const [showSparklines, setShowSparklines] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ── Undo / redo refs ────────────────────────────────────────────────────────
+
+  const pastRef = useRef<SnapshotState[]>([]);
+  const futureRef = useRef<SnapshotState[]>([]);
+
+  function currentSnapshot(): SnapshotState {
+    return { gridData, formatMap, rowLabels, colLabels, rowTypes };
+  }
+
+  function pushSnapshot(snapshot: SnapshotState) {
+    pastRef.current = [...pastRef.current.slice(-49), snapshot];
+    futureRef.current = [];
+  }
+
+  // ── Selection helpers ───────────────────────────────────────────────────────
+
+  function getActiveCell(sel: Selection | null): CellCoord | null {
+    return sel ? sel.focus : null;
+  }
+
+  function isCellInSelection(row: number, col: number, sel: Selection | null): boolean {
+    if (!sel) return false;
+    const minR = Math.min(sel.anchor.row, sel.focus.row);
+    const maxR = Math.max(sel.anchor.row, sel.focus.row);
+    const minC = Math.min(sel.anchor.col, sel.focus.col);
+    const maxC = Math.max(sel.anchor.col, sel.focus.col);
+    return row >= minR && row <= maxR && col >= minC && col <= maxC;
+  }
+
+  function getSelectionBounds(sel: Selection) {
+    return {
+      minRow: Math.min(sel.anchor.row, sel.focus.row),
+      maxRow: Math.max(sel.anchor.row, sel.focus.row),
+      minCol: Math.min(sel.anchor.col, sel.focus.col),
+      maxCol: Math.max(sel.anchor.col, sel.focus.col),
+    };
+  }
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
@@ -49,20 +112,57 @@ const Spreadsheet: React.FC = () => {
   const columnTotals = useMemo(() => computeColumnTotals(gridData), [gridData]);
   const grandTotal = useMemo(() => columnTotals.reduce((acc, t) => acc + t, 0), [columnTotals]);
 
+  const displayGrid = useMemo(() => {
+    return gridData.map((row) =>
+      row.map((cell) => {
+        if (!isFormula(cell)) return cell;
+        const result = evaluateFormula(cell, gridData);
+        if (result.error) return result.error;
+        return String(result.value);
+      }),
+    );
+  }, [gridData]);
+
+  const rowNumericValues = useMemo(() => {
+    return displayGrid.map((row) => row.map((cell) => parseRawNumber(cell)));
+  }, [displayGrid]);
+
+  const renderRows = useMemo(() => buildRenderRows(NUM_ROWS, rowTypes), [rowTypes]);
+
+  // ── Cell address display ───────────────────────────────────────────────────
+
+  const activeCell = getActiveCell(selection);
+  const activeCellAddress = activeCell
+    ? `${String.fromCharCode(65 + activeCell.col)}${activeCell.row + 1}`
+    : '';
+
   // ── Sync toolbar format when selection changes ─────────────────────────────
 
   useEffect(() => {
-    if (selectedCell) {
-      const key = `${selectedCell.row}:${selectedCell.col}`;
+    const ac = getActiveCell(selection);
+    if (ac) {
+      const key = `${ac.row}:${ac.col}`;
       setActiveFormat(formatMap[key] ?? 'auto');
     }
-  }, [selectedCell, formatMap]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection, formatMap]);
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 
-  const navigateTo = useCallback((from: CellCoord, direction: NavDirection) => {
-    let { row, col } = from;
+  function navigateTo(row: number, col: number, shiftKey = false) {
+    const clampedRow = Math.max(0, Math.min(NUM_ROWS - 1, row));
+    const clampedCol = Math.max(0, Math.min(NUM_COLS - 1, col));
+    const newFocus: CellCoord = { row: clampedRow, col: clampedCol };
+    if (shiftKey && selection) {
+      setSelection({ anchor: selection.anchor, focus: newFocus });
+    } else {
+      setSelection({ anchor: newFocus, focus: newFocus });
+    }
+  }
 
+  // Legacy navigateTo used by Cell's onNavigate (coord + direction)
+  const handleNavFromCell = useCallback((coord: CellCoord, direction: NavDirection) => {
+    let { row, col } = coord;
     switch (direction) {
       case 'up':
         row = Math.max(0, row - 1);
@@ -85,22 +185,34 @@ const Spreadsheet: React.FC = () => {
       default:
         break;
     }
-
-    setSelectedCell({ row, col });
+    setSelection({ anchor: { row, col }, focus: { row, col } });
     setEditingCell(null);
     setEditingInitialChar(undefined);
   }, []);
+
+  // ── Cell selection ──────────────────────────────────────────────────────────
+
+  function handleCellSelect(row: number, col: number, shiftKey: boolean) {
+    setEditingCell(null);
+    if (shiftKey && selection) {
+      setSelection({ anchor: selection.anchor, focus: { row, col } });
+    } else {
+      setSelection({ anchor: { row, col }, focus: { row, col } });
+    }
+  }
 
   // ── Edit lifecycle ─────────────────────────────────────────────────────────
 
   const startEditing = useCallback((coord: CellCoord, initialChar?: string) => {
     setEditingCell(coord);
-    setSelectedCell(coord);
+    setSelection({ anchor: coord, focus: coord });
     setEditingInitialChar(initialChar);
   }, []);
 
   const commitEdit = useCallback(
     (coord: CellCoord, direction: CommitDirection, newValue: string) => {
+      if (!editingCell) return;
+      pushSnapshot(currentSnapshot());
       setGridData((prev) => {
         const newRow = [
           ...prev[coord.row].slice(0, coord.col),
@@ -112,122 +224,299 @@ const Spreadsheet: React.FC = () => {
       setEditingCell(null);
       setEditingInitialChar(undefined);
 
-      const moveMap: Record<CommitDirection, NavDirection | null> = {
-        enter: 'down',
-        'shift-enter': 'up',
-        tab: 'right',
-        'shift-tab': 'left',
+      const dirMap: Record<CommitDirection, [number, number]> = {
+        enter: [1, 0],
+        'shift-enter': [-1, 0],
+        tab: [0, 1],
+        'shift-tab': [0, -1],
       };
-      const move = moveMap[direction];
-      if (move) {
-        navigateTo(coord, move);
-      } else {
-        setSelectedCell(coord);
-      }
+      const [dr, dc] = dirMap[direction];
+      const nextRow = Math.max(0, Math.min(NUM_ROWS - 1, coord.row + dr));
+      const nextCol = Math.max(0, Math.min(NUM_COLS - 1, coord.col + dc));
+      setSelection({
+        anchor: { row: nextRow, col: nextCol },
+        focus: { row: nextRow, col: nextCol },
+      });
     },
-    [navigateTo],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editingCell],
   );
 
   const cancelEdit = useCallback((coord: CellCoord) => {
     setEditingCell(null);
     setEditingInitialChar(undefined);
-    setSelectedCell(coord);
+    setSelection({ anchor: coord, focus: coord });
   }, []);
 
-  const clearCell = useCallback((coord: CellCoord) => {
-    setGridData((prev) => {
-      const newRow = [
-        ...prev[coord.row].slice(0, coord.col),
-        '',
-        ...prev[coord.row].slice(coord.col + 1),
-      ];
-      return [...prev.slice(0, coord.row), newRow, ...prev.slice(coord.row + 1)];
-    });
-  }, []);
+  // ── Clear cells ─────────────────────────────────────────────────────────────
+
+  function clearCell() {
+    if (!selection) return;
+    pushSnapshot(currentSnapshot());
+    const bounds = getSelectionBounds(selection);
+    setGridData((prev) =>
+      prev.map((row, ri) =>
+        ri >= bounds.minRow && ri <= bounds.maxRow
+          ? row.map((cell, ci) => (ci >= bounds.minCol && ci <= bounds.maxCol ? '' : cell))
+          : row,
+      ),
+    );
+  }
 
   // ── Format toolbar ─────────────────────────────────────────────────────────
 
-  const handleFormatChange = useCallback(
-    (format: CellFormat) => {
-      if (!selectedCell) return;
-      const key = `${selectedCell.row}:${selectedCell.col}`;
-      setFormatMap((prev) => ({ ...prev, [key]: format }));
-      setActiveFormat(format);
-    },
-    [selectedCell],
-  );
+  function handleFormatChange(format: CellFormat) {
+    if (!selection) return;
+    pushSnapshot(currentSnapshot());
+    const bounds = getSelectionBounds(selection);
+    setFormatMap((prev) => {
+      const next = { ...prev };
+      for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
+        for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
+          const key = `${r}:${c}`;
+          if (format === 'auto') {
+            delete next[key];
+          } else {
+            next[key] = format;
+          }
+        }
+      }
+      return next;
+    });
+    setActiveFormat(format);
+  }
+
+  // ── Undo / redo ─────────────────────────────────────────────────────────────
+
+  function undo() {
+    if (pastRef.current.length === 0) return;
+    const snapshot = pastRef.current[pastRef.current.length - 1];
+    pastRef.current = pastRef.current.slice(0, -1);
+    futureRef.current = [currentSnapshot(), ...futureRef.current.slice(0, 49)];
+    setGridData(snapshot.gridData);
+    setFormatMap(snapshot.formatMap);
+    setRowLabels(snapshot.rowLabels);
+    setColLabels(snapshot.colLabels);
+    setRowTypes(snapshot.rowTypes);
+  }
+
+  function redo() {
+    if (futureRef.current.length === 0) return;
+    const snapshot = futureRef.current[0];
+    futureRef.current = futureRef.current.slice(1);
+    pastRef.current = [...pastRef.current.slice(-49), currentSnapshot()];
+    setGridData(snapshot.gridData);
+    setFormatMap(snapshot.formatMap);
+    setRowLabels(snapshot.rowLabels);
+    setColLabels(snapshot.colLabels);
+    setRowTypes(snapshot.rowTypes);
+  }
+
+  // ── Copy / paste ────────────────────────────────────────────────────────────
+
+  async function copySelection() {
+    if (!selection) return;
+    const bounds = getSelectionBounds(selection);
+    const rows: string[] = [];
+    for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
+      const cols: string[] = [];
+      for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
+        cols.push(displayGrid[r][c]);
+      }
+      rows.push(cols.join('\t'));
+    }
+    try {
+      await navigator.clipboard.writeText(rows.join('\n'));
+    } catch {
+      // clipboard access denied in some environments
+    }
+  }
+
+  async function pasteFromClipboard() {
+    const ac = getActiveCell(selection);
+    if (!ac) return;
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      const pastedRows = text.split('\n').map((r) => r.split('\t'));
+      pushSnapshot(currentSnapshot());
+      setGridData((prev) =>
+        prev.map((row, ri) => {
+          const pasteRowIdx = ri - ac.row;
+          if (pasteRowIdx < 0 || pasteRowIdx >= pastedRows.length) return row;
+          return row.map((cell, ci) => {
+            const pasteColIdx = ci - ac.col;
+            if (pasteColIdx < 0 || pasteColIdx >= pastedRows[pasteRowIdx].length) return cell;
+            return pastedRows[pasteRowIdx][pasteColIdx];
+          });
+        }),
+      );
+    } catch {
+      // clipboard access denied
+    }
+  }
+
+  // ── CSV export ──────────────────────────────────────────────────────────────
+
+  function exportCsv() {
+    const headers = ['', ...colLabels, 'Total'];
+    const csvRows: string[] = [headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(',')];
+
+    gridData.forEach((row, ri) => {
+      const rowTotal = row.reduce((sum, cell) => {
+        const n = parseRawNumber(cell);
+        return sum + (isNaN(n) ? 0 : n);
+      }, 0);
+      const cells = row.map((cell, ci) => {
+        const fmt = formatMap[`${ri}:${ci}`] ?? 'auto';
+        const display = formatCellValue(cell, fmt);
+        return `"${display.replace(/"/g, '""')}"`;
+      });
+      const label = `"${rowLabels[ri].replace(/"/g, '""')}"`;
+      const total = `"${rowTotal}"`;
+      csvRows.push([label, ...cells, total].join(','));
+    });
+
+    const csv = csvRows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${activeScenarioId ?? 'spreadsheet'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   // ── Scenario loader ────────────────────────────────────────────────────────
 
   const loadScenario = useCallback((scenario: Scenario | null) => {
+    pushSnapshot(currentSnapshot());
     setGridData(scenario ? scenario.data.map((row) => [...row]) : INITIAL_GRID);
     setRowLabels(scenario ? [...scenario.rowLabels] : Array(NUM_ROWS).fill(''));
     setColLabels(scenario ? [...scenario.colLabels] : Array(NUM_COLS).fill(''));
     setFormatMap(scenario ? { ...scenario.formatMap } : {});
     setActiveScenarioId(scenario ? scenario.id : null);
-    setSelectedCell(null);
+    setRowTypes(scenario?.rowTypes ?? {});
+    setSelection(null);
     setEditingCell(null);
     setEditingInitialChar(undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Label change handlers ──────────────────────────────────────────────────
 
   const handleRowLabelChange = useCallback((row: number, label: string) => {
+    pushSnapshot(currentSnapshot());
     setRowLabels((prev) => [...prev.slice(0, row), label, ...prev.slice(row + 1)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleColLabelChange = useCallback((col: number, label: string) => {
+    pushSnapshot(currentSnapshot());
     setColLabels((prev) => [...prev.slice(0, col), label, ...prev.slice(col + 1)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Container keyboard handler (navigation & non-edit shortcuts) ───────────
+  // ── Container keyboard handler ─────────────────────────────────────────────
 
   const handleContainerKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!selectedCell) return;
+    const ac = getActiveCell(selection);
+
+    // Ctrl/Cmd shortcuts
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if (e.key === 'c') {
+        e.preventDefault();
+        copySelection().catch(() => {});
+        return;
+      }
+      if (e.key === 'v') {
+        e.preventDefault();
+        pasteFromClipboard().catch(() => {});
+        return;
+      }
+    }
+
+    if (!ac) return;
     if (editingCell) return; // Cell's input handles keys in edit mode
+
+    // Shift+Arrow for multi-cell selection
+    if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      switch (e.key) {
+        case 'ArrowRight':
+          e.preventDefault();
+          navigateTo(ac.row, ac.col + 1, true);
+          return;
+        case 'ArrowLeft':
+          e.preventDefault();
+          navigateTo(ac.row, ac.col - 1, true);
+          return;
+        case 'ArrowDown':
+          e.preventDefault();
+          navigateTo(ac.row + 1, ac.col, true);
+          return;
+        case 'ArrowUp':
+          e.preventDefault();
+          navigateTo(ac.row - 1, ac.col, true);
+          return;
+        default:
+          break;
+      }
+    }
 
     switch (e.key) {
       case 'ArrowUp':
         e.preventDefault();
-        navigateTo(selectedCell, 'up');
+        navigateTo(ac.row - 1, ac.col);
         break;
       case 'ArrowDown':
         e.preventDefault();
-        navigateTo(selectedCell, 'down');
+        navigateTo(ac.row + 1, ac.col);
         break;
       case 'ArrowLeft':
         e.preventDefault();
-        navigateTo(selectedCell, 'left');
+        navigateTo(ac.row, ac.col - 1);
         break;
       case 'ArrowRight':
         e.preventDefault();
-        navigateTo(selectedCell, 'right');
+        navigateTo(ac.row, ac.col + 1);
         break;
       case 'Tab':
         e.preventDefault();
-        navigateTo(selectedCell, e.shiftKey ? 'left' : 'right');
+        navigateTo(ac.row, e.shiftKey ? ac.col - 1 : ac.col + 1);
         break;
       case 'Enter':
         e.preventDefault();
-        startEditing(selectedCell);
+        startEditing(ac);
         break;
       case 'Home':
         e.preventDefault();
-        navigateTo(selectedCell, 'home');
+        navigateTo(ac.row, 0);
         break;
       case 'End':
         e.preventDefault();
-        navigateTo(selectedCell, 'end');
+        navigateTo(ac.row, NUM_COLS - 1);
         break;
       case 'Backspace':
       case 'Delete':
         e.preventDefault();
-        clearCell(selectedCell);
+        clearCell();
         break;
       default:
         // Printable character: start editing with that character as initial value
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-          startEditing(selectedCell, e.key);
+          startEditing(ac, e.key);
         }
         break;
     }
@@ -240,10 +529,8 @@ const Spreadsheet: React.FC = () => {
       <div className="toolbar-bar">
         <div className="toolbar-left">
           <div className="cell-address">
-            <div className={`cell-address-box${selectedCell ? '' : ' cell-address-placeholder'}`}>
-              {selectedCell
-                ? `${String.fromCharCode(65 + selectedCell.col)}${selectedCell.row + 1}`
-                : '—'}
+            <div className={`cell-address-box${activeCell ? '' : ' cell-address-placeholder'}`}>
+              {activeCell ? activeCellAddress : '—'}
             </div>
           </div>
           <ScenarioPicker activeScenarioId={activeScenarioId} onLoad={loadScenario} />
@@ -251,7 +538,10 @@ const Spreadsheet: React.FC = () => {
         <FormatToolbar
           activeFormat={activeFormat}
           onFormatChange={handleFormatChange}
-          disabled={selectedCell === null}
+          disabled={selection === null}
+          showSparklines={showSparklines}
+          onToggleSparklines={() => setShowSparklines((v) => !v)}
+          onExportCsv={exportCsv}
         />
       </div>
       <div
@@ -266,56 +556,152 @@ const Spreadsheet: React.FC = () => {
         <div className="spreadsheet-grid">
           <ColumnHeaders
             columnCount={NUM_COLS}
-            selectedCol={selectedCell?.col ?? null}
+            selectedCol={activeCell?.col ?? null}
             colLabels={colLabels}
             onColLabelChange={handleColLabelChange}
           />
-          {gridData.map((row, rowIdx) => (
-            <div key={rowIdx} className="spreadsheet-row" role="row">
-              <div className={`row-header${selectedCell?.row === rowIdx ? ' row-active' : ''}`}>
-                <EditableHeader
-                  value={rowLabels[rowIdx] ?? ''}
-                  placeholder={String(rowIdx + 1)}
-                  onChange={(val) => handleRowLabelChange(rowIdx, val)}
-                  isActive={selectedCell?.row === rowIdx}
-                  className="row-header-editable"
-                />
-              </div>
-              {row.map((cellValue, colIdx) => {
-                const fmt: CellFormat = formatMap[`${rowIdx}:${colIdx}`] ?? 'auto';
-                const numeric = isNumericString(cellValue);
-                const negative = isNegativeNumber(cellValue);
-                return (
-                  <Cell
-                    key={`${rowIdx}:${colIdx}`}
-                    value={cellValue}
-                    displayValue={formatCellValue(cellValue, fmt)}
-                    isActive={selectedCell?.row === rowIdx && selectedCell?.col === colIdx}
-                    isSelected={selectedCell?.row === rowIdx && selectedCell?.col === colIdx}
-                    isEditing={editingCell?.row === rowIdx && editingCell?.col === colIdx}
-                    isNumeric={numeric}
-                    isNegative={negative}
-                    format={fmt}
-                    row={rowIdx}
-                    col={colIdx}
-                    initialEditValue={
-                      editingCell?.row === rowIdx && editingCell?.col === colIdx
-                        ? editingInitialChar
-                        : undefined
-                    }
-                    onSelect={(r, c, _shiftKey) => setSelectedCell({ row: r, col: c })}
-                    onStartEdit={startEditing}
-                    onCommit={commitEdit}
-                    onCancel={cancelEdit}
-                    onNavigate={navigateTo}
+          {renderRows.map((renderRow, idx) => {
+            if (renderRow.kind === 'data') {
+              const ri = renderRow.rowIndex;
+              return (
+                <div key={`row-${ri}`} className="spreadsheet-row" role="row">
+                  <EditableHeader
+                    value={rowLabels[ri] ?? ''}
+                    placeholder={String(ri + 1)}
+                    onChange={(v) => {
+                      pushSnapshot(currentSnapshot());
+                      handleRowLabelChange(ri, v);
+                    }}
+                    isActive={false}
+                    className="row-header-editable"
+                    rowType={rowTypes[ri] ?? 'data'}
+                    onRowTypeChange={(type) => {
+                      pushSnapshot(currentSnapshot());
+                      setRowTypes((prev) => {
+                        if (type === 'data') {
+                          const next = { ...prev };
+                          delete next[ri];
+                          return next;
+                        }
+                        return { ...prev, [ri]: type };
+                      });
+                    }}
                   />
-                );
-              })}
-              <div className={`total-cell${rowTotals[rowIdx] === 0 ? ' zero' : ''}`}>
-                {rowTotals[rowIdx] === 0 ? '—' : formatNumber(rowTotals[rowIdx], 'currency')}
-              </div>
-            </div>
-          ))}
+                  {showSparklines && (
+                    <div className="sparkline-col">
+                      <Sparkline values={rowNumericValues[ri]} />
+                    </div>
+                  )}
+                  {gridData[ri].map((cellValue, ci) => {
+                    const fmt: CellFormat = formatMap[`${ri}:${ci}`] ?? 'auto';
+                    const numeric = isNumericString(cellValue);
+                    const negative = isNegativeNumber(cellValue);
+                    return (
+                      <Cell
+                        key={`${ri}:${ci}`}
+                        value={cellValue}
+                        displayValue={
+                          displayGrid[ri][ci] !== cellValue
+                            ? displayGrid[ri][ci]
+                            : formatCellValue(cellValue, fmt)
+                        }
+                        isActive={activeCell?.row === ri && activeCell?.col === ci}
+                        isSelected={isCellInSelection(ri, ci, selection)}
+                        isEditing={editingCell?.row === ri && editingCell?.col === ci}
+                        isNumeric={numeric}
+                        isNegative={negative}
+                        format={fmt}
+                        row={ri}
+                        col={ci}
+                        initialEditValue={
+                          editingCell?.row === ri && editingCell?.col === ci
+                            ? editingInitialChar
+                            : undefined
+                        }
+                        onSelect={handleCellSelect}
+                        onStartEdit={startEditing}
+                        onCommit={commitEdit}
+                        onCancel={cancelEdit}
+                        onNavigate={handleNavFromCell}
+                      />
+                    );
+                  })}
+                  <div
+                    className="cell cell--total"
+                    role="gridcell"
+                    aria-label={`Row ${ri + 1} total`}
+                  >
+                    {rowTotals[ri] !== 0 ? formatCellValue(String(rowTotals[ri]), 'currency') : '—'}
+                  </div>
+                </div>
+              );
+            }
+
+            if (renderRow.kind === 'variance' || renderRow.kind === 'variance-pct') {
+              const { planRow, actualRow } = renderRow;
+              const isPct = renderRow.kind === 'variance-pct';
+              const label = isPct ? '└ Var %' : '└ Variance';
+
+              const cells = Array.from({ length: NUM_COLS }, (_el, ci) => {
+                const planVal = parseRawNumber(displayGrid[planRow][ci]);
+                const actualVal = parseRawNumber(displayGrid[actualRow][ci]);
+                if (isNaN(planVal) || isNaN(actualVal)) return null;
+                if (isPct) {
+                  if (planVal === 0) return null;
+                  return ((actualVal - planVal) / Math.abs(planVal)) * 100;
+                }
+                return actualVal - planVal;
+              });
+
+              return (
+                <div
+                  key={`${renderRow.kind}-${planRow}-${idx}`}
+                  className="spreadsheet-row variance-row"
+                  role="row"
+                >
+                  <div className="row-header-cell variance-label">{label}</div>
+                  {showSparklines && <div className="sparkline-col" />}
+                  {cells.map((v, ci) => {
+                    if (v === null) {
+                      return (
+                        <div key={ci} className="cell cell--variance" role="gridcell">
+                          —
+                        </div>
+                      );
+                    }
+                    if (v === 0) {
+                      return (
+                        <div key={ci} className="cell cell--variance" role="gridcell">
+                          —
+                        </div>
+                      );
+                    }
+                    const sign = v > 0 ? 'positive' : 'negative';
+                    const arrow = v > 0 ? '▲' : '▼';
+                    const formatted = isPct
+                      ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
+                      : formatCellValue(String(Math.abs(v)), 'currency').replace(
+                          '$',
+                          v >= 0 ? '+$' : '-$',
+                        );
+                    return (
+                      <div
+                        key={ci}
+                        className={`cell cell--variance cell-value--${sign}`}
+                        role="gridcell"
+                      >
+                        <span className="variance-arrow">{arrow} </span>
+                        {formatted}
+                      </div>
+                    );
+                  })}
+                  <div className="cell cell--total" role="gridcell" />
+                </div>
+              );
+            }
+
+            return null;
+          })}
           <div className="spreadsheet-row totals-row" role="row">
             <div className="row-header">Σ</div>
             {columnTotals.map((total, colIdx) => (

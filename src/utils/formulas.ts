@@ -1,8 +1,6 @@
 import type { GridData } from '../types';
 
-export type FormulaResult =
-  | { value: number; error: undefined }
-  | { value: null; error: string };
+export type FormulaResult = { value: number; error: undefined } | { value: null; error: string };
 
 /** Parse "B3" → { row: 2, col: 1 }. Returns null if invalid or out of 10x10 bounds. */
 function parseCellRef(ref: string): { row: number; col: number } | null {
@@ -19,7 +17,7 @@ function getCellNumeric(
   row: number,
   col: number,
   gridData: GridData,
-  visiting: Set<string>
+  visiting: Set<string>,
 ): number | null {
   const key = `${row}:${col}`;
   if (visiting.has(key)) return null; // circular reference guard
@@ -39,7 +37,7 @@ function getCellNumeric(
 function getRangeValues(
   rangeStr: string,
   gridData: GridData,
-  visiting: Set<string>
+  visiting: Set<string>,
 ): number[] | null {
   const parts = rangeStr.split(':');
   if (parts.length !== 2) return null;
@@ -57,11 +55,7 @@ function getRangeValues(
 }
 
 /** Evaluate an expression string (without the leading "="). */
-function evalExpr(
-  expr: string,
-  gridData: GridData,
-  visiting: Set<string>
-): FormulaResult {
+function evalExpr(expr: string, gridData: GridData, visiting: Set<string>): FormulaResult {
   const trimmed = expr.trim();
 
   // Range functions: SUM(...), AVERAGE(...), AVG(...), MIN(...), MAX(...)
@@ -80,6 +74,8 @@ function evalExpr(
         return { value: Math.min(...values), error: undefined };
       case 'MAX':
         return { value: Math.max(...values), error: undefined };
+      default:
+        return { value: null, error: '#ERR!' };
     }
   }
 
@@ -102,7 +98,7 @@ function evalExpr(
 
   try {
     // Function constructor is safer than eval: strict mode, no closure scope access
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
     const result = new Function('"use strict"; return (' + arithmetic + ')')() as number;
     if (!isFinite(result)) return { value: null, error: '#DIV/0!' };
     if (isNaN(result)) return { value: null, error: '#NAN!' };
