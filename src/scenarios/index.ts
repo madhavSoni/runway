@@ -4,11 +4,11 @@ const NUM_ROWS = 10;
 const NUM_COLS = 10;
 
 function buildFormatMap(
-  entries: Array<{ row: number; col: number; format: CellFormat }>
+  entries: Array<{ row: number; col: number; format: CellFormat }>,
 ): FormatMap {
   return entries.reduce<FormatMap>(
     (acc, { row, col, format }) => ({ ...acc, [`${row}:${col}`]: format }),
-    {}
+    {},
   );
 }
 
@@ -29,8 +29,12 @@ const revenueModelData: GridData = [
 
 const revenueModelFormats: FormatMap = buildFormatMap(
   Array.from({ length: 4 }, (_, r) =>
-    Array.from({ length: NUM_COLS }, (__, c) => ({ row: r, col: c, format: 'currency' as CellFormat }))
-  ).flat()
+    Array.from({ length: NUM_COLS }, (__, c) => ({
+      row: r,
+      col: c,
+      format: 'currency' as CellFormat,
+    })),
+  ).flat(),
 );
 
 const revenueModel: Scenario = {
@@ -60,8 +64,8 @@ const cashFlowData: GridData = [
 
 const cashFlowFormats: FormatMap = buildFormatMap(
   Array.from({ length: NUM_ROWS }, (_, r) =>
-    Array.from({ length: 5 }, (__, c) => ({ row: r, col: c, format: 'currency' as CellFormat }))
-  ).flat()
+    Array.from({ length: 5 }, (__, c) => ({ row: r, col: c, format: 'currency' as CellFormat })),
+  ).flat(),
 );
 
 const cashFlow: Scenario = {
@@ -69,9 +73,16 @@ const cashFlow: Scenario = {
   name: 'Cash Flow Forecast',
   description: 'Quarterly inflows and outflows',
   rowLabels: [
-    'Customer Revenue', 'Pro Services', 'Total Inflows',
-    'Payroll', 'COGS', 'Marketing', 'R&D', 'G&A',
-    'Total Outflows', 'Net Cash Flow',
+    'Customer Revenue',
+    'Pro Services',
+    'Total Inflows',
+    'Payroll',
+    'COGS',
+    'Marketing',
+    'R&D',
+    'G&A',
+    'Total Outflows',
+    'Net Cash Flow',
   ],
   colLabels: ['Q1', 'Q2', 'Q3', 'Q4', 'FY Total', '', '', '', '', ''],
   data: cashFlowData,
@@ -99,7 +110,7 @@ const bvaFormats: FormatMap = buildFormatMap(
     { row: r, col: 1, format: 'currency' as CellFormat },
     { row: r, col: 2, format: 'currency' as CellFormat },
     { row: r, col: 3, format: 'percentage' as CellFormat },
-  ]).flat()
+  ]).flat(),
 );
 
 const budgetVsActuals: Scenario = {
@@ -107,12 +118,30 @@ const budgetVsActuals: Scenario = {
   name: 'Budget vs. Actuals',
   description: 'Plan vs. performance with variance',
   rowLabels: [
-    'Revenue', 'Cost of Revenue', 'Gross Profit',
-    'Sales & Mktg', 'R&D', 'G&A', 'Total OpEx', 'EBITDA', '', '',
+    'Revenue',
+    'Cost of Revenue',
+    'Gross Profit',
+    'Sales & Mktg',
+    'R&D',
+    'G&A',
+    'Total OpEx',
+    'EBITDA',
+    '',
+    '',
   ],
   colLabels: ['Budget', 'Actual', 'Variance', 'Var %', '', '', '', '', '', ''],
   data: bvaData,
   formatMap: bvaFormats,
+  rowTypes: {
+    0: 'plan',
+    1: 'plan',
+    2: 'plan',
+    3: 'plan',
+    4: 'plan',
+    5: 'plan',
+    6: 'plan',
+    7: 'plan',
+  },
 };
 
 // ── P&L Summary ───────────────────────────────────────────────────────────────
@@ -132,8 +161,8 @@ const pnlData: GridData = [
 
 const pnlFormats: FormatMap = buildFormatMap(
   Array.from({ length: NUM_ROWS }, (_, r) =>
-    Array.from({ length: 5 }, (__, c) => ({ row: r, col: c, format: 'currency' as CellFormat }))
-  ).flat()
+    Array.from({ length: 5 }, (__, c) => ({ row: r, col: c, format: 'currency' as CellFormat })),
+  ).flat(),
 );
 
 const pnlSummary: Scenario = {
@@ -141,9 +170,16 @@ const pnlSummary: Scenario = {
   name: 'P&L Summary',
   description: 'Multi-year income statement',
   rowLabels: [
-    'Revenue', 'Cost of Revenue', 'Gross Profit',
-    'Sales & Marketing', 'R&D', 'G&A',
-    'Operating Exp', 'Operating Income', 'Interest & Other', 'Net Income',
+    'Revenue',
+    'Cost of Revenue',
+    'Gross Profit',
+    'Sales & Marketing',
+    'R&D',
+    'G&A',
+    'Operating Exp',
+    'Operating Income',
+    'Interest & Other',
+    'Net Income',
   ],
   colLabels: ['FY 2022', 'FY 2023', 'FY 2024', 'LTM', 'NTM', '', '', '', '', ''],
   data: pnlData,
