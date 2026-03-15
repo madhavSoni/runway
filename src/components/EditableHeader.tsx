@@ -58,6 +58,13 @@ const EditableHeader: React.FC<EditableHeaderProps> = ({
     }
   };
 
+  const handleDisplayKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setIsEditing(true);
+    }
+  };
+
   if (isEditing) {
     return (
       <input
@@ -76,9 +83,11 @@ const EditableHeader: React.FC<EditableHeaderProps> = ({
     <div
       className={`editable-header-display${isActive ? ' active' : ''} ${className}`}
       onClick={() => setIsEditing(true)}
+      onKeyDown={handleDisplayKeyDown}
       title="Click to edit label"
       role="button"
-      tabIndex={-1}
+      tabIndex={0}
+      aria-label={value || placeholder}
     >
       {value || <span className="editable-header-placeholder">{placeholder}</span>}
     </div>

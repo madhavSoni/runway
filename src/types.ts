@@ -61,6 +61,11 @@ export interface Scenario {
   formatMap: FormatMap;
 }
 
+export interface ScenarioPickerProps {
+  activeScenarioId: ScenarioId | null;
+  onLoad: (scenario: Scenario | null) => void;
+}
+
 export interface EditableHeaderProps {
   value: string;
   placeholder: string;

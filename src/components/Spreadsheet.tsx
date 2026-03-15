@@ -14,6 +14,7 @@ import {
   GridData,
   NavDirection,
   Scenario,
+  ScenarioId,
 } from '../types';
 import {
   computeColumnTotals,
@@ -38,7 +39,7 @@ const Spreadsheet: React.FC = () => {
   const [activeFormat, setActiveFormat] = useState<CellFormat>('auto');
   const [rowLabels, setRowLabels] = useState<string[]>(Array(NUM_ROWS).fill(''));
   const [colLabels, setColLabels] = useState<string[]>(Array(NUM_COLS).fill(''));
-  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
+  const [activeScenarioId, setActiveScenarioId] = useState<ScenarioId | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -158,36 +159,25 @@ const Spreadsheet: React.FC = () => {
 
   // ── Scenario loader ────────────────────────────────────────────────────────
 
-  const loadScenario = useCallback(
-    (scenario: Scenario | null) => {
-      setGridData(scenario ? scenario.data.map((row) => [...row]) : INITIAL_GRID);
-      setRowLabels(scenario ? [...scenario.rowLabels] : Array(NUM_ROWS).fill(''));
-      setColLabels(scenario ? [...scenario.colLabels] : Array(NUM_COLS).fill(''));
-      setFormatMap(scenario ? { ...scenario.formatMap } : {});
-      setActiveScenarioId(scenario ? scenario.id : null);
-      setSelectedCell(null);
-      setEditingCell(null);
-      setEditingInitialChar(undefined);
-    },
-    [],
-  );
+  const loadScenario = useCallback((scenario: Scenario | null) => {
+    setGridData(scenario ? scenario.data.map((row) => [...row]) : INITIAL_GRID);
+    setRowLabels(scenario ? [...scenario.rowLabels] : Array(NUM_ROWS).fill(''));
+    setColLabels(scenario ? [...scenario.colLabels] : Array(NUM_COLS).fill(''));
+    setFormatMap(scenario ? { ...scenario.formatMap } : {});
+    setActiveScenarioId(scenario ? scenario.id : null);
+    setSelectedCell(null);
+    setEditingCell(null);
+    setEditingInitialChar(undefined);
+  }, []);
 
   // ── Label change handlers ──────────────────────────────────────────────────
 
   const handleRowLabelChange = useCallback((row: number, label: string) => {
-    setRowLabels((prev) => {
-      const next = [...prev];
-      next[row] = label;
-      return next;
-    });
+    setRowLabels((prev) => [...prev.slice(0, row), label, ...prev.slice(row + 1)]);
   }, []);
 
   const handleColLabelChange = useCallback((col: number, label: string) => {
-    setColLabels((prev) => {
-      const next = [...prev];
-      next[col] = label;
-      return next;
-    });
+    setColLabels((prev) => [...prev.slice(0, col), label, ...prev.slice(col + 1)]);
   }, []);
 
   // ── Container keyboard handler (navigation & non-edit shortcuts) ───────────

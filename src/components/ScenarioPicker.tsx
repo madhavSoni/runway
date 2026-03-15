@@ -1,12 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 import { SCENARIOS } from '../scenarios';
-import { Scenario } from '../types';
-
-interface ScenarioPickerProps {
-  activeScenarioId: string | null;
-  onLoad: (scenario: Scenario | null) => void;
-}
+import { Scenario, ScenarioPickerProps } from '../types';
 
 const ScenarioPicker: React.FC<ScenarioPickerProps> = ({ activeScenarioId, onLoad }) => {
   const [open, setOpen] = useState(false);
