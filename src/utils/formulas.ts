@@ -132,13 +132,19 @@ export function isFormula(value: string): boolean {
   return value.startsWith('=');
 }
 
-const REF_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#a855f7', '#ec4899'];
+const REF_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#a855f7', '#ec4899'] as const;
 
 export interface RefHighlight {
   coord: CellCoord;
   color: string;
 }
 
+/**
+ * Extract cell references from a formula string and assign highlight colors.
+ * Returns [] for non-formula strings (not starting with "=").
+ * Each unique cell ref gets a distinct color from a 6-color palette (round-robin).
+ * Range endpoints (e.g. A1 and B3 in =SUM(A1:B3)) are highlighted individually.
+ */
 export function parseFormulaRefs(formula: string): RefHighlight[] {
   if (!formula.startsWith('=')) return [];
   const seen = new Map<string, string>();
