@@ -290,6 +290,7 @@ const Spreadsheet: React.FC = () => {
                     key={`${rowIdx}:${colIdx}`}
                     value={cellValue}
                     displayValue={formatCellValue(cellValue, fmt)}
+                    isActive={selectedCell?.row === rowIdx && selectedCell?.col === colIdx}
                     isSelected={selectedCell?.row === rowIdx && selectedCell?.col === colIdx}
                     isEditing={editingCell?.row === rowIdx && editingCell?.col === colIdx}
                     isNumeric={numeric}
@@ -302,7 +303,7 @@ const Spreadsheet: React.FC = () => {
                         ? editingInitialChar
                         : undefined
                     }
-                    onSelect={setSelectedCell}
+                    onSelect={(r, c, _shiftKey) => setSelectedCell({ row: r, col: c })}
                     onStartEdit={startEditing}
                     onCommit={commitEdit}
                     onCancel={cancelEdit}
