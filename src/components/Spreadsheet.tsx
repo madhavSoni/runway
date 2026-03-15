@@ -59,7 +59,6 @@ const Spreadsheet: React.FC = () => {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [editingCell, setEditingCell] = useState<CellCoord | null>(null);
   const [editingInitialChar, setEditingInitialChar] = useState<string | undefined>(undefined);
-  const [activeFormat, setActiveFormat] = useState<CellFormat>('auto');
   const [rowLabels, setRowLabels] = useState<string[]>(Array(NUM_ROWS).fill(''));
   const [colLabels, setColLabels] = useState<string[]>(Array(NUM_COLS).fill(''));
   const [activeScenarioId, setActiveScenarioId] = useState<ScenarioId | null>(null);
@@ -67,6 +66,20 @@ const Spreadsheet: React.FC = () => {
   const [showSparklines, setShowSparklines] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ── Snapshot ref (always current, avoids stale closures) ────────────────────
+
+  const snapshotRef = useRef<SnapshotState>({
+    gridData,
+    formatMap,
+    rowLabels,
+    colLabels,
+    rowTypes,
+  });
+
+  useEffect(() => {
+    snapshotRef.current = { gridData, formatMap, rowLabels, colLabels, rowTypes };
+  }, [gridData, formatMap, rowLabels, colLabels, rowTypes]);
 
   // ── Undo / redo refs ────────────────────────────────────────────────────────
 
@@ -108,10 +121,6 @@ const Spreadsheet: React.FC = () => {
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
-  const rowTotals = useMemo(() => computeRowTotals(gridData), [gridData]);
-  const columnTotals = useMemo(() => computeColumnTotals(gridData), [gridData]);
-  const grandTotal = useMemo(() => columnTotals.reduce((acc, t) => acc + t, 0), [columnTotals]);
-
   const displayGrid = useMemo(() => {
     return gridData.map((row) =>
       row.map((cell) => {
@@ -122,6 +131,10 @@ const Spreadsheet: React.FC = () => {
       }),
     );
   }, [gridData]);
+
+  const rowTotals = useMemo(() => computeRowTotals(displayGrid), [displayGrid]);
+  const columnTotals = useMemo(() => computeColumnTotals(displayGrid), [displayGrid]);
+  const grandTotal = useMemo(() => columnTotals.reduce((acc, t) => acc + t, 0), [columnTotals]);
 
   const rowNumericValues = useMemo(() => {
     return displayGrid.map((row) => row.map((cell) => parseRawNumber(cell)));
@@ -136,16 +149,11 @@ const Spreadsheet: React.FC = () => {
     ? `${String.fromCharCode(65 + activeCell.col)}${activeCell.row + 1}`
     : '';
 
-  // ── Sync toolbar format when selection changes ─────────────────────────────
+  // ── Active format (derived directly, no useEffect needed) ─────────────────
 
-  useEffect(() => {
-    const ac = getActiveCell(selection);
-    if (ac) {
-      const key = `${ac.row}:${ac.col}`;
-      setActiveFormat(formatMap[key] ?? 'auto');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selection, formatMap]);
+  const activeFormat: CellFormat = activeCell
+    ? (formatMap[`${activeCell.row}:${activeCell.col}`] ?? 'auto')
+    : 'auto';
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 
@@ -212,7 +220,7 @@ const Spreadsheet: React.FC = () => {
   const commitEdit = useCallback(
     (coord: CellCoord, direction: CommitDirection, newValue: string) => {
       if (!editingCell) return;
-      pushSnapshot(currentSnapshot());
+      pushSnapshot(snapshotRef.current);
       setGridData((prev) => {
         const newRow = [
           ...prev[coord.row].slice(0, coord.col),
@@ -283,7 +291,6 @@ const Spreadsheet: React.FC = () => {
       }
       return next;
     });
-    setActiveFormat(format);
   }
 
   // ── Undo / redo ─────────────────────────────────────────────────────────────
@@ -363,13 +370,13 @@ const Spreadsheet: React.FC = () => {
     const csvRows: string[] = [headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(',')];
 
     gridData.forEach((row, ri) => {
-      const rowTotal = row.reduce((sum, cell) => {
+      const rowTotal = displayGrid[ri].reduce((sum, cell) => {
         const n = parseRawNumber(cell);
         return sum + (isNaN(n) ? 0 : n);
       }, 0);
-      const cells = row.map((cell, ci) => {
+      const cells = row.map((_cell, ci) => {
         const fmt = formatMap[`${ri}:${ci}`] ?? 'auto';
-        const display = formatCellValue(cell, fmt);
+        const display = formatCellValue(displayGrid[ri][ci], fmt);
         return `"${display.replace(/"/g, '""')}"`;
       });
       const label = `"${rowLabels[ri].replace(/"/g, '""')}"`;
@@ -392,7 +399,7 @@ const Spreadsheet: React.FC = () => {
   // ── Scenario loader ────────────────────────────────────────────────────────
 
   const loadScenario = useCallback((scenario: Scenario | null) => {
-    pushSnapshot(currentSnapshot());
+    pushSnapshot(snapshotRef.current);
     setGridData(scenario ? scenario.data.map((row) => [...row]) : INITIAL_GRID);
     setRowLabels(scenario ? [...scenario.rowLabels] : Array(NUM_ROWS).fill(''));
     setColLabels(scenario ? [...scenario.colLabels] : Array(NUM_COLS).fill(''));
@@ -408,13 +415,13 @@ const Spreadsheet: React.FC = () => {
   // ── Label change handlers ──────────────────────────────────────────────────
 
   const handleRowLabelChange = useCallback((row: number, label: string) => {
-    pushSnapshot(currentSnapshot());
+    pushSnapshot(snapshotRef.current);
     setRowLabels((prev) => [...prev.slice(0, row), label, ...prev.slice(row + 1)]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleColLabelChange = useCallback((col: number, label: string) => {
-    pushSnapshot(currentSnapshot());
+    pushSnapshot(snapshotRef.current);
     setColLabels((prev) => [...prev.slice(0, col), label, ...prev.slice(col + 1)]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -569,14 +576,13 @@ const Spreadsheet: React.FC = () => {
                     value={rowLabels[ri] ?? ''}
                     placeholder={String(ri + 1)}
                     onChange={(v) => {
-                      pushSnapshot(currentSnapshot());
                       handleRowLabelChange(ri, v);
                     }}
                     isActive={false}
                     className="row-header-editable"
                     rowType={rowTypes[ri] ?? 'data'}
                     onRowTypeChange={(type) => {
-                      pushSnapshot(currentSnapshot());
+                      pushSnapshot(snapshotRef.current);
                       setRowTypes((prev) => {
                         if (type === 'data') {
                           const next = { ...prev };
@@ -680,10 +686,7 @@ const Spreadsheet: React.FC = () => {
                     const arrow = v > 0 ? '▲' : '▼';
                     const formatted = isPct
                       ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
-                      : formatCellValue(String(Math.abs(v)), 'currency').replace(
-                          '$',
-                          v >= 0 ? '+$' : '-$',
-                        );
+                      : `${v >= 0 ? '+' : '-'}${formatCellValue(String(Math.abs(v)), 'currency')}`;
                     return (
                       <div
                         key={ci}
