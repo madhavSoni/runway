@@ -760,7 +760,7 @@ const Spreadsheet: React.FC = () => {
         />
       )}
       <div className="spreadsheet-with-chart">
-        <div>
+        <div style={{ display: 'inline-flex', flexDirection: 'column' }}>
           <div
             ref={containerRef}
             className="spreadsheet-container"
