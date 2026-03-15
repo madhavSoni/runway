@@ -50,21 +50,21 @@ const revenueModel: Scenario = {
 // ── Cash Flow Forecast ─────────────────────────────────────────────────────────
 
 const cashFlowData: GridData = [
-  [...[850000, 920000, 1010000, 1100000, 3880000].map(String), '', '', '', '', ''],
-  [...[120000, 135000, 145000, 160000, 560000].map(String), '', '', '', '', ''],
-  [...[970000, 1055000, 1155000, 1260000, 4440000].map(String), '', '', '', '', ''],
-  [...[420000, 435000, 450000, 465000, 1770000].map(String), '', '', '', '', ''],
-  [...[180000, 195000, 215000, 235000, 825000].map(String), '', '', '', '', ''],
-  [...[95000, 105000, 115000, 125000, 440000].map(String), '', '', '', '', ''],
-  [...[150000, 155000, 160000, 165000, 630000].map(String), '', '', '', '', ''],
-  [...[55000, 57000, 59000, 61000, 232000].map(String), '', '', '', '', ''],
-  [...[900000, 947000, 999000, 1051000, 3897000].map(String), '', '', '', '', ''],
-  [...[70000, 108000, 156000, 209000, 543000].map(String), '', '', '', '', ''],
+  [...[850000, 920000, 1010000, 1100000].map(String), '', '', '', '', '', ''],
+  [...[823000, 905000, 988000, 1145000].map(String), '', '', '', '', '', ''],
+  [...[120000, 135000, 145000, 160000].map(String), '', '', '', '', '', ''],
+  [...[115000, 142000, 152000, 163000].map(String), '', '', '', '', '', ''],
+  [...[900000, 947000, 999000, 1051000].map(String), '', '', '', '', '', ''],
+  [...[887000, 962000, 1021000, 1038000].map(String), '', '', '', '', '', ''],
+  Array(10).fill(''),
+  Array(10).fill(''),
+  Array(10).fill(''),
+  Array(10).fill(''),
 ];
 
 const cashFlowFormats: FormatMap = buildFormatMap(
-  Array.from({ length: NUM_ROWS }, (_, r) =>
-    Array.from({ length: 5 }, (__, c) => ({ row: r, col: c, format: 'currency' as CellFormat })),
+  Array.from({ length: 6 }, (_, r) =>
+    Array.from({ length: 4 }, (__, c) => ({ row: r, col: c, format: 'currency' as CellFormat })),
   ).flat(),
 );
 
@@ -73,20 +73,28 @@ const cashFlow: Scenario = {
   name: 'Cash Flow Forecast',
   description: 'Quarterly inflows and outflows',
   rowLabels: [
-    'Customer Revenue',
-    'Pro Services',
-    'Total Inflows',
-    'Payroll',
-    'COGS',
-    'Marketing',
-    'R&D',
-    'G&A',
-    'Total Outflows',
-    'Net Cash Flow',
+    'Revenue (Plan)',
+    'Revenue (Actual)',
+    'Services (Plan)',
+    'Services (Actual)',
+    'Total OpEx (Plan)',
+    'Total OpEx (Actual)',
+    '',
+    '',
+    '',
+    '',
   ],
-  colLabels: ['Q1', 'Q2', 'Q3', 'Q4', 'FY Total', '', '', '', '', ''],
+  colLabels: ['Q1', 'Q2', 'Q3', 'Q4', '', '', '', '', '', ''],
   data: cashFlowData,
   formatMap: cashFlowFormats,
+  rowTypes: {
+    0: 'plan',
+    1: 'actual',
+    2: 'plan',
+    3: 'actual',
+    4: 'plan',
+    5: 'actual',
+  },
 };
 
 // ── Budget vs. Actuals ─────────────────────────────────────────────────────────
@@ -132,16 +140,6 @@ const budgetVsActuals: Scenario = {
   colLabels: ['Budget', 'Actual', 'Variance', 'Var %', '', '', '', '', '', ''],
   data: bvaData,
   formatMap: bvaFormats,
-  rowTypes: {
-    0: 'plan',
-    1: 'plan',
-    2: 'plan',
-    3: 'plan',
-    4: 'plan',
-    5: 'plan',
-    6: 'plan',
-    7: 'plan',
-  },
 };
 
 // ── P&L Summary ───────────────────────────────────────────────────────────────
